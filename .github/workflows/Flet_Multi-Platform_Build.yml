@@ -1,18 +1,17 @@
-```yaml
 name: Flet Multi-Platform Build
 
 on:
   push:
-    tags:
-      - 'v*'  # 当推送以v开头的标签时触发，如v1.0.0
-    branches:
-      - main  # 临时添加：推送到main分支时也触发（测试用）
-  workflow_dispatch:  # 临时添加：手动触发
+    # 正确格式：tags 和 branches 需要作为列表项处理
+    tags: ['v*']  # 当推送以v开头的标签时触发，如v1.0.0
+    branches: [main]  # 推送到main分支时也触发（测试用）
+  workflow_dispatch:  # 手动触发
     inputs:
       test_version:
         description: '测试版本号'
         required: true
         default: 'v0.1.0-test'
+
 
 jobs:
   build:
@@ -261,4 +260,3 @@ jobs:
             artifacts/**/*
         env:
           GITHUB_TOKEN: ${{ secrets.PERSONAL_TOKEN || secrets.GITHUB_TOKEN }}
-```
