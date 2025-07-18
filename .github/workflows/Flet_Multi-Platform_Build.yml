@@ -1,0 +1,234 @@
+name: Flet Multi-Platform Build
+
+on:
+  push:
+    tags:
+      - 'v*'  # 当推送以v开头的标签时触发，如v1.0.0
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          # macOS Intel 64位
+          - os: macos-latest
+            target: macos-intel
+            artifact_name: swisskit-macos-intel
+            installer_ext: .dmg
+            python_arch: x64
+            flutter_target: macos
+          
+          # macOS Apple Silicon (M1/M2)
+          - os: macos-latest
+            target: macos-arm
+            artifact_name: swisskit-macos-arm
+            installer_ext: .dmg
+            python_arch: arm64
+            flutter_target: macos
+          
+          # Windows 64位
+          - os: windows-latest
+            target: windows-x64
+            artifact_name: swisskit-windows-x64
+            installer_ext: .exe
+            python_arch: x64
+            flutter_target: windows
+          
+          # Linux 64位
+          - os: ubuntu-latest
+            target: linux-x64
+            artifact_name: swisskit-linux-x64
+            installer_ext: .tar.gz
+            python_arch: x64
+            flutter_target: linux
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          architecture: ${{ matrix.python_arch }}
+
+      # 设置 Flutter (flet build 需要)
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+          channel: 'stable'
+
+      # 安装 uv
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Install dependencies with uv
+        run: |
+          # 使用 uv sync 同步依赖（推荐方式，使用 uv.lock）
+          uv sync --system
+          
+          # 确保 flet 已安装（如果不在 pyproject.toml 中）
+          if ! uv pip show --system flet > /dev/null 2>&1; then
+            uv pip install --system flet
+          fi
+        shell: bash
+
+      # 通用构建步骤
+      - name: Build with flet build
+        run: |
+          flet build ${{ matrix.flutter_target }} \
+            --project "src/main.py" \
+            --product-name "SwissKit" \
+            --product-version "${{ github.ref_name }}" \
+            --copyright "© 2024 YourCompany" \
+            --build-name "${{ github.ref_name }}" \
+            --build-number "${GITHUB_RUN_NUMBER}" \
+            --include-packages "src/assets"
+        shell: bash
+
+      # macOS 后处理和打包
+      - name: Package for macOS
+        if: matrix.os == 'macos-latest'
+        run: |
+          # 创建DMG安装包
+          brew install create-dmg
+          
+          # 移动.app文件到临时目录
+          mkdir -p dmg_temp
+          cp -R build/macos/SwissKit.app dmg_temp/
+          
+          # 创建DMG
+          create-dmg \
+            --volname "SwissKit ${{ github.ref_name }}" \
+            --window-pos 200 120 \
+            --window-size 800 400 \
+            --icon-size 100 \
+            --icon "SwissKit.app" 200 190 \
+            --hide-extension "SwissKit.app" \
+            --app-drop-link 600 185 \
+            --background-color "#f0f0f0" \
+            "build/${{ matrix.artifact_name }}.dmg" \
+            "dmg_temp/"
+
+      # Windows 后处理
+      - name: Package for Windows
+        if: matrix.os == 'windows-latest'
+        run: |
+          # 重命名exe文件
+          move "build\windows\SwissKit.exe" "build\${{ matrix.artifact_name }}.exe"
+
+      # Linux 后处理和打包
+      - name: Package for Linux
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          # 安装系统依赖
+          sudo apt-get update
+          sudo apt-get install -y \
+            libasound2-dev \
+            libatk-bridge2.0-dev \
+            libdrm2 \
+            libgtk-3-dev \
+            libnspr4 \
+            libnss3 \
+            libx11-xcb1 \
+            libxcomposite1 \
+            libxdamage1 \
+            libxrandr2 \
+            libxss1 \
+            libxtst6 \
+            xvfb
+          
+          # 创建AppImage
+          wget -c https://github.com/probonopd/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          chmod +x linuxdeploy-x86_64.AppImage
+          
+          # 创建AppDir结构
+          mkdir -p AppDir/usr/bin
+          cp build/linux/SwissKit AppDir/usr/bin/
+          
+          # 创建desktop文件
+          cat > AppDir/swisskit.desktop << EOF
+          [Desktop Entry]
+          Type=Application
+          Name=SwissKit
+          Exec=SwissKit
+          Icon=swisskit
+          Categories=Utility;
+          Comment=SwissKit Application
+          EOF
+          
+          # 如果有图标文件，复制到AppDir
+          if [ -f "src/assets/icon.png" ]; then
+            cp src/assets/icon.png AppDir/swisskit.png
+          fi
+          
+          # 构建AppImage
+          export ARCH=x86_64
+          ./linuxdeploy-x86_64.AppImage --appdir AppDir --output appimage
+          
+          # 重命名AppImage
+          mv SwissKit-*.AppImage build/SwissKit.AppImage
+          
+          # 创建tar.gz包（另一种分发方式）
+          cd build
+          tar -czf ${{ matrix.artifact_name }}.tar.gz SwissKit
+          cd ..
+
+      # 上传构建产物
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: |
+            build/${{ matrix.artifact_name }}${{ matrix.installer_ext }}
+            build/SwissKit.AppImage
+
+  # 创建GitHub Release
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Display structure of downloaded files
+        run: ls -la artifacts/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          body: |
+            ## 下载说明
+            
+            - **macOS Intel**: 下载 `swisskit-macos-intel.dmg`
+            - **macOS Apple Silicon**: 下载 `swisskit-macos-arm.dmg`
+            - **Windows 64位**: 下载 `swisskit-windows-x64.exe`
+            - **Linux**: 下载 `SwissKit.AppImage` 或 `swisskit-linux-x64.tar.gz`
+            
+            ### Linux 使用方法
+            ```bash
+            # AppImage方式
+            chmod +x SwissKit.AppImage
+            ./SwissKit.AppImage
+            
+            # tar.gz方式
+            tar -xzf swisskit-linux-x64.tar.gz
+            ./SwissKit
+            ```
+          files: |
+            artifacts/**/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
