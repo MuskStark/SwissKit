@@ -1,8 +1,6 @@
 import flet as ft
 
 from .page.excel_split_v2 import ExcelSplitPageV2
-from .page.guan_hu_match import Relationship
-from .page.innovation import Innovation
 from .page.odap_formater import ODAPFormater
 from .page.odap_search_value import ODAPSearchValue
 
