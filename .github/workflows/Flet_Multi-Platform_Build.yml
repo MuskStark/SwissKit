@@ -4,6 +4,14 @@ on:
   push:
     tags:
       - 'v*'  # 当推送以v开头的标签时触发，如v1.0.0
+    branches:
+      - main  # 临时添加：推送到main分支时也触发（测试用）
+  workflow_dispatch:  # 临时添加：手动触发
+    inputs:
+      test_version:
+        description: '测试版本号'
+        required: true
+        default: 'v0.1.0-test'
 
 jobs:
   build:
@@ -70,23 +78,31 @@ jobs:
       - name: Install dependencies with uv
         run: |
           # 使用 uv sync 同步依赖（推荐方式，使用 uv.lock）
-          uv sync --system
+          uv sync
           
           # 确保 flet 已安装（如果不在 pyproject.toml 中）
-          if ! uv pip show --system flet > /dev/null 2>&1; then
-            uv pip install --system flet
+          if ! uv run python -c "import flet" > /dev/null 2>&1; then
+            uv add flet
           fi
         shell: bash
 
       # 通用构建步骤
       - name: Build with flet build
         run: |
-          flet build ${{ matrix.flutter_target }} \
+          # 获取版本号（支持手动触发时使用输入的版本号）
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.test_version }}"
+          else
+            VERSION="${{ github.ref_name }}"
+          fi
+          
+          # 使用 uv run 来运行 flet build
+          uv run flet build ${{ matrix.flutter_target }} \
             --project "src/main.py" \
             --product-name "SwissKit" \
-            --product-version "${{ github.ref_name }}" \
+            --product-version "$VERSION" \
             --copyright "© 2024 YourCompany" \
-            --build-name "${{ github.ref_name }}" \
+            --build-name "$VERSION" \
             --build-number "${GITHUB_RUN_NUMBER}" \
             --include-packages "src/assets"
         shell: bash
@@ -206,10 +222,10 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ github.ref_name }}
-          name: Release ${{ github.ref_name }}
+          tag_name: ${{ github.event.inputs.test_version || github.ref_name }}
+          name: Release ${{ github.event.inputs.test_version || github.ref_name }}
           draft: false
-          prerelease: false
+          prerelease: ${{ contains(github.event.inputs.test_version || github.ref_name, 'test') || contains(github.event.inputs.test_version || github.ref_name, 'alpha') || contains(github.event.inputs.test_version || github.ref_name, 'beta') }}
           body: |
             ## 下载说明
             
@@ -231,4 +247,4 @@ jobs:
           files: |
             artifacts/**/*
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.PERSONAL_TOKEN || secrets.GITHUB_TOKEN }}
