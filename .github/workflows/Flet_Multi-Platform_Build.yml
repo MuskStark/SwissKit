@@ -1,0 +1,195 @@
+# name: Flet Multi-Platform Build
+
+# on:
+#   push:
+#     tags: ['v*']  # 标签触发
+#     branches: [main]  # main分支触发
+#   workflow_dispatch:  # 手动触发
+#     inputs:
+#       test_version:
+#         description: '测试版本号'
+#         required: true
+#         default: 'v0.1.0-test'
+
+# jobs:
+#   build:
+#     strategy:
+#       matrix:
+#         include:
+#           # macOS Intel
+#           - os: macos-latest
+#             target: macos-intel
+#             artifact_name: swisskit-macos-intel
+#             installer_ext: .dmg
+#             python_arch: x64
+#             flutter_target: macos
+          
+#           # macOS Apple Silicon
+#           - os: macos-latest
+#             target: macos-arm
+#             artifact_name: swisskit-macos-arm
+#             installer_ext: .dmg
+#             python_arch: arm64
+#             flutter_target: macos
+          
+#           # Windows
+#           - os: windows-latest
+#             target: windows-x64
+#             artifact_name: swisskit-windows-x64
+#             installer_ext: .zip  # 改为ZIP打包整个文件夹
+#             python_arch: x64
+#             flutter_target: windows
+          
+#           # Linux
+#           - os: ubuntu-latest
+#             target: linux-x64
+#             artifact_name: swisskit-linux-x64
+#             installer_ext: .tar.gz
+#             python_arch: x64
+#             flutter_target: linux
+
+#     runs-on: ${{ matrix.os }}
+
+#     steps:
+#       - name: Checkout code
+#         uses: actions/checkout@v4
+
+#       - name: Setup Python
+#         uses: actions/setup-python@v5
+#         with:
+#           python-version: '3.11'
+#           architecture: ${{ matrix.python_arch }}
+
+#       - name: Setup Flutter
+#         uses: subosito/flutter-action@v2
+#         with:
+#           flutter-version: '3.24.0'
+#           channel: 'stable'
+
+#       - name: Install uv
+#         uses: astral-sh/setup-uv@v3
+#         with:
+#           enable-cache: true
+
+#       - name: Install dependencies
+#         run: |
+#           uv sync
+#           # 确保核心依赖安装
+#           uv add flet pyinstaller
+
+#       - name: Build with flet
+#         run: |
+#           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+#             VERSION="${{ github.event.inputs.test_version }}"
+#           else
+#             VERSION="${{ github.ref_name }}"
+#           fi
+          
+#           # Windows需要特殊编码处理
+#           if [[ "${{ matrix.os }}" == *"windows"* ]]; then
+#             export PYTHONIOENCODING=utf-8
+#             export PYTHONUTF8=1
+#             uv run flet build --build-version "$VERSION" ${{ matrix.flutter_target }}
+#           else
+#             uv run flet build --build-version "$VERSION" ${{ matrix.flutter_target }}
+#           fi
+#         shell: bash
+
+#       # ===== 平台特定打包步骤 =====
+#       - name: Package macOS
+#         if: matrix.os == 'macos-latest'
+#         run: |
+#           # 创建应用目录结构
+#           mkdir -p dist/SwissKit.app/Contents/MacOS
+#           cp -R build/macos/swisskit.app/* dist/swisskit.app/Contents/
+          
+#           # 生成DMG
+#           brew install create-dmg
+#           create-dmg \
+#             --volname "SwissKit $VERSION" \
+#             --window-size 800 400 \
+#             --icon "SwissKit.app" 200 190 \
+#             "build/${{ matrix.artifact_name }}.dmg" \
+#             "dist/SwissKit.app"
+
+#       - name: Package Windows
+#         if: matrix.os == 'windows-latest'
+#         shell: powershell
+#         run: |
+#           # 压缩整个构建目录
+#           Compress-Archive -Path "build\windows\*" -DestinationPath "build\${{ matrix.artifact_name }}.zip"
+
+#       - name: Package Linux
+#         if: matrix.os == 'ubuntu-latest'
+#         run: |
+#           # 创建可执行文件目录
+#           mkdir -p dist/linux
+#           cp -R build/linux/* dist/linux/
+          
+#           # 创建AppImage
+#           wget -c https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+#           chmod +x appimagetool-x86_64.AppImage
+          
+#           # 准备AppDir结构
+#           mkdir -p AppDir/usr/bin
+#           cp dist/linux/SwissKit AppDir/usr/bin/
+          
+#           # 创建桌面入口
+#           cat > AppDir/swisskit.desktop << EOF
+#           [Desktop Entry]
+#           Name=SwissKit
+#           Exec=SwissKit
+#           Icon=swisskit
+#           Type=Application
+#           Categories=Utility;
+#           EOF
+          
+#           # 添加图标
+#           if [ -f "assets/icon.png" ]; then
+#             cp assets/icon.png AppDir/swisskit.png
+#           fi
+          
+#           # 生成AppImage
+#           ARCH=x86_64 ./appimagetool-x86_64.AppImage AppDir
+#           mv SwissKit-*.AppImage build/SwissKit-${{ github.ref_name }}.AppImage
+          
+#           # 创建tar.gz包
+#           tar -czf build/${{ matrix.artifact_name }}.tar.gz -C dist/linux .
+
+#       # ===== 统一上传步骤 =====
+#       - name: Upload artifacts
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: ${{ matrix.artifact_name }}
+#           path: |
+#             build/${{ matrix.artifact_name }}*
+#             build/SwissKit*.AppImage
+
+#   release:
+#     needs: build
+#     runs-on: ubuntu-latest
+#     permissions:
+#       contents: write
+#     steps:
+#       - name: Download artifacts
+#         uses: actions/download-artifact@v4
+#         with:
+#           path: artifacts/
+
+#       - name: Create Release
+#         uses: softprops/action-gh-release@v1
+#         with:
+#           tag_name: ${{ github.event.inputs.test_version || github.ref_name }}
+#           name: Release ${{ github.event.inputs.test_version || github.ref_name }}
+#           files: |
+#             artifacts/**/*
+#           body: |
+#             ## 下载说明
+#             - **macOS**: 选择对应芯片版本的DMG文件
+#             - **Windows**: 下载 `swisskit-windows-x64.zip` 并解压运行
+#             - **Linux**: 使用AppImage或tar.gz包
+            
+#             ### 完整构建日志
+#             可在Artifacts中查看各平台构建详情
+#         env:
+#           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
