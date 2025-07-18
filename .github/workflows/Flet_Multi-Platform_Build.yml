@@ -97,14 +97,7 @@ jobs:
           fi
           
           # 使用 uv run 来运行 flet build
-          uv run flet build ${{ matrix.flutter_target }} \
-            --project "src/main.py" \
-            --product-name "SwissKit" \
-            --product-version "$VERSION" \
-            --copyright "© 2024 YourCompany" \
-            --build-name "$VERSION" \
-            --build-number "${GITHUB_RUN_NUMBER}" \
-            --include-packages "src/assets"
+          uv run flet build ${{ matrix.flutter_target }}
         shell: bash
 
       # macOS 后处理和打包
