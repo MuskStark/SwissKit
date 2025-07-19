@@ -12,9 +12,6 @@ from ..toolbox_page import ToolBoxPage
 from ...util import json_loader
 from ...util.resource_path import resource_path
 
-"""
-智数平台数据格式化工具界面
-"""
 
 class ODAPFormater(ToolBoxPage):
     def __init__(self, page: ft.Page):
@@ -27,7 +24,7 @@ class ODAPFormater(ToolBoxPage):
                 self.page.update()
 
         file_picker = ft.FilePicker(on_result=on_file_selected)
-        file_path = ft.TextField(label="待上传智数平台文件", read_only=True, expand=True)
+        file_path = ft.TextField(label="待增加英文表头的文件", read_only=True, expand=True)
         self.page.overlay.append(file_picker)
 
         def on_dir_selected(e: ft.FilePickerResultEvent):
@@ -118,10 +115,10 @@ class ODAPFormater(ToolBoxPage):
             ft_text.value = "开始翻译表头"
             page.update()
             cn_en_map = self.en_col_processing(col_dic, check_box.value)
-            ft_text.value = "开始生成ODAP上传所需数据"
+            ft_text.value = "开始生成数据"
             page.update()
             df = self.change_col(file_path, cn_en_map)
-            ft_text.value = f"开始写入ODAP上传文件:ODAP_{Path(file_path).stem}"
+            ft_text.value = f"开始写入文件:EN_{Path(file_path).stem}"
             page.update()
             self.df_writer(df, Path(file_path).stem, out_put_path)
             ft_finished_icon.visible = True
