@@ -1,81 +1,89 @@
-# Swiss Kit app
+# Swiss Kit 官方文档
 
-## Run the app
+## 项目背景
 
-### uv
+SwissKit项目孵化于作者日常工作所开发的效率工具箱，因一些不可抗力作者决定放弃原效率工具箱的开发工作，在剔除非泛性工具后决定基于**GUN AGPL v3.0**开源协议进行开源。这也是为什么首个开源版本号从``v0.2.1``开始的原因。
 
-Run as a desktop app:
+## 安装项目
 
-```
-uv run flet run
-```
+### 一、从源码构建
 
-Run as a web app:
+#### 1.克隆项目至本地
 
-```
-uv run flet run --web
-```
-
-### Poetry
-
-Install dependencies from `pyproject.toml`:
-
-```
-poetry install
+```bash
+git clone https://github.com/MuskStark/SwissKit.git
+cd ~/SwissKit
 ```
 
-Run as a desktop app:
+#### 2.安装项目依赖
 
-```
-poetry run flet run
-```
-
-Run as a web app:
-
-```
-poetry run flet run --web
+```bash
+uv sync
 ```
 
-For more details on running the app, refer to the [Getting Started Guide](https://flet.dev/docs/getting-started/).
+项目使用uv作为包管理器，如何安装与使用请参考uv[官方文档](https://docs.astral.sh/uv/)
 
-## Build the app
+3.构建应用
 
-### Android
-
-```
-flet build apk -v
-```
-
-For more details on building and signing `.apk` or `.aab`, refer to the [Android Packaging Guide](https://flet.dev/docs/publish/android/).
-
-### iOS
-
-```
-flet build ipa -v
-```
-
-For more details on building and signing `.ipa`, refer to the [iOS Packaging Guide](https://flet.dev/docs/publish/ios/).
-
-### macOS
+- macOS
 
 ```
 flet build macos -v
 ```
 
-For more details on building macOS package, refer to the [macOS Packaging Guide](https://flet.dev/docs/publish/macos/).
+ [MacOS打包文档](https://flet.dev/docs/publish/macos/).
 
-### Linux
+- Linux
 
 ```
 flet build linux -v
 ```
 
-For more details on building Linux package, refer to the [Linux Packaging Guide](https://flet.dev/docs/publish/linux/).
+[Linux打包文档](https://flet.dev/docs/publish/linux/).
 
-### Windows
+- Windows
 
 ```
 flet build windows -v
 ```
 
-For more details on building Windows package, refer to the [Windows Packaging Guide](https://flet.dev/docs/publish/windows/).
+ [Windows打包文档](https://flet.dev/docs/publish/windows/)
+
+### 二、从Release界面直接下载
+
+目前项目仅构建``Windows``平台的应用程序[Release Page](https://github.com/MuskStark/SwissKit/releases)，后续将会支持``MacOS``与``Linux``平台
+
+## SwissKit功能介绍
+
+### 一、Excel拆分功能
+
+使用Excel拆分功能需要先选择待拆分Excel文件（**文件仅支持.xlsx**，主要不想背负太多技术债）与最终文件拆分输出的文件夹路径。完成选择后点击``解析后拆分``，待完成解析后将显示拆分选项。
+
+![Excel拆分工具界面](./images/excelSplit/1.png)
+
+
+
+#### 1.Excel基本拆分
+
+![](./images/excelSplit/2.png)
+
+- 支持将Excel中的Sheet页拆分成单个Excel文件；
+- 支持根据选定的Sheet与列对Excel进行拆分
+
+> **基本拆分下不支持任何包含复杂表头的Excel拆分**
+
+#### 1.Excel高级拆分
+
+> **高级拆分主要实现了多Sheet页同时拆分至结果文件中**
+
+- 单一表头拆分模式
+
+![](./images/excelSplit/3.png)
+
+在该模式下，仅需选择需拆分的Sheet页，通过点击``获取可拆分列``按钮后可选择所选Sheet页中同名列进行拆分
+
+- 复杂表头拆分模式
+
+![](./images/excelSplit/4.png)
+
+在该模式下，通过填写配置拆分规则，工具将根据配置情况对Excel进行拆分
