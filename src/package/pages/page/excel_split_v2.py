@@ -1,19 +1,39 @@
 import os
-import tempfile
+import platform
 import shutil
+import subprocess
+import tempfile
 from pathlib import Path
 from time import sleep
 from typing import cast
-from openpyxl import load_workbook
-from openpyxl.utils import get_column_letter
 
 import flet as ft
 import pandas as pd
+from openpyxl import load_workbook
 
 from ..toolbox_page import ToolBoxPage
 from ...components.progress_ring_components import ProgressRingComponent
 from ...enums.progress_status_enums import ProgressStatus
 from ...util.excel_util import ExcelHeaderExtractor
+
+
+def open_folder_in_explorer(path):
+    path = Path(path)
+    if not path.exists():
+        return False
+
+    path_str = str(path.absolute())
+
+    try:
+        if platform.system() == 'Windows':
+            os.startfile(path_str)
+        elif platform.system() == 'Darwin':  # macOS
+            subprocess.run(['open', path_str])
+        else:  # Linux
+            subprocess.run(['xdg-open', path_str])
+        return True
+    except Exception as e:
+        return False
 
 
 class ExcelSplitPageV2(ToolBoxPage):
@@ -26,6 +46,7 @@ class ExcelSplitPageV2(ToolBoxPage):
         self.page = main_page
         self.disable = True
         self.excel = None
+        self.checkBox = ft.Checkbox(label='拆分后打开输出文件夹', value=True)
     # 内部类
     class ExcelObject:
         def __init__(self, file_path: str):
@@ -306,7 +327,8 @@ class ExcelSplitPageV2(ToolBoxPage):
                 # Generate file
                 # Copy template file to out file
                 for k, v in result_dic.items():
-                    # TODO:file_name {k} contain '/' case 'no such file or directory error'
+                    if '/' in k:
+                        k = k.replace('/','-')
                     file_name = Path(self.excel.file_path).stem + f'_{k}.xlsx'
                     processing_ring.update_status(ProgressStatus.LOADING, f'生成文件：{file_name}')
                     out_file_path = Path(output_folder_path_text.value, file_name)
@@ -379,16 +401,20 @@ class ExcelSplitPageV2(ToolBoxPage):
                         # 保存最终文件
                         final_wb.save(out_file_path)
                         final_wb.close()
-                        processing_ring.update_status(ProgressStatus.SUCCESS,'拆分完成')
-
                     finally:
                         # 清理临时文件
                         for temp_path in temp_files:
                             if os.path.exists(temp_path):
                                 os.remove(temp_path)
+                processing_ring.update_status(ProgressStatus.SUCCESS, '拆分完成')
+                if self.checkBox.value:
+                    open_folder_in_explorer(output_folder_path_text.value)
             except Exception as e:
                 processing_ring.update_status(ProgressStatus.ERROR, str(e))
-
+            finally:
+                header_tmp_folder_path = Path(output_folder_path_text.value, 'tmp')
+                if header_tmp_folder_path.exists() and header_tmp_folder_path.is_dir():
+                    shutil.rmtree(header_tmp_folder_path)
 
         # GUI
         if self.excel is None:
@@ -563,6 +589,7 @@ class ExcelSplitPageV2(ToolBoxPage):
                 ],
                 expand=True
             ),
+            self.checkBox,
             ft.Row(controls=[analyze_button,analyze_process_ring],alignment=ft.MainAxisAlignment.CENTER,expand=True)
         ])
         self.page.overlay.extend([file_picker, folder_picker])
