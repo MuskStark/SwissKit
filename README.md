@@ -54,4 +54,4 @@ flet build windows -v
 目前项目仅构建``Windows``平台的应用程序[Release Page](https://github.com/MuskStark/SwissKit/releases)，后续将会支持``MacOS``与``Linux``平台
 
 ## SwissKit功能介绍
-[SwissKit官方文档](https://muskstark.github.io/swisskit)
+[SwissKit官方文档](https://muskstark.github.io/SwissKit)
