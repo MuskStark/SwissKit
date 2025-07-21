@@ -388,7 +388,10 @@ class ExcelSplitPageV2(ToolBoxPage):
                                 os.remove(temp_path)
             except Exception as e:
                 processing_ring.update_status(ProgressStatus.ERROR, str(e))
-
+            finally:
+                header_tmp_folder_path = Path(output_folder_path_text.value, 'tmp')
+                if header_tmp_folder_path.exists() and header_tmp_folder_path.is_dir():
+                    shutil.rmtree(header_tmp_folder_path)
 
         # GUI
         if self.excel is None:
