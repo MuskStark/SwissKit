@@ -1,14 +1,13 @@
 import os
-import tempfile
 import shutil
+import tempfile
 from pathlib import Path
 from time import sleep
 from typing import cast
-from openpyxl import load_workbook
-from openpyxl.utils import get_column_letter
 
 import flet as ft
 import pandas as pd
+from openpyxl import load_workbook
 
 from ..toolbox_page import ToolBoxPage
 from ...components.progress_ring_components import ProgressRingComponent
@@ -306,7 +305,8 @@ class ExcelSplitPageV2(ToolBoxPage):
                 # Generate file
                 # Copy template file to out file
                 for k, v in result_dic.items():
-                    # TODO:file_name {k} contain '/' case 'no such file or directory error'
+                    if '/' in k:
+                        k.replace('/','-')
                     file_name = Path(self.excel.file_path).stem + f'_{k}.xlsx'
                     processing_ring.update_status(ProgressStatus.LOADING, f'生成文件：{file_name}')
                     out_file_path = Path(output_folder_path_text.value, file_name)
