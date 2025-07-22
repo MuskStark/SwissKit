@@ -3,6 +3,7 @@ import tomllib
 import flet as ft
 
 from package.components import navigation
+from package.database.database_obj import DataBaseObj
 from package.pages import pages_loader
 from package.util.resource_path import resource_path
 
@@ -38,6 +39,8 @@ async def main(page: ft.Page):
 
     # 清除加载提示
     page.clean()
+
+    DataBaseObj().db.connect()
 
     # 添加主界面
     page.add(
