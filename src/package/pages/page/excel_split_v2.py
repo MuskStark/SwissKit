@@ -214,6 +214,7 @@ class ExcelSplitPageV2(ToolBoxPage):
                             _v.to_excel(writer, sheet_name=_k, index=False)
 
                 _process_ring.update_status(ProgressStatus.SUCCESS, "完成拆分")
+                open_folder_in_explorer(output_folder_path_text.value)
 
             except Exception as e:
                 _process_ring.update_status(ProgressStatus.ERROR, str(e))
@@ -508,6 +509,7 @@ class ExcelSplitPageV2(ToolBoxPage):
                         self.excel.sheets[sheet_name].df_data.to_excel(
                             Path(folder_path_text.value, file_name + f"_{sheet_name}.xlsx"), index=False)
                 progress.update_status(ProgressStatus.SUCCESS, '完成文件拆分')
+                open_folder_in_explorer(output_folder_path_text.value)
             except Exception as e:
                 progress.update_status(ProgressStatus.ERROR, str(e))
 
