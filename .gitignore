@@ -2,3 +2,4 @@
 /build/
 /src/database-test/
 uv.lock
+/src/log/
