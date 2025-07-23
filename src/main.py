@@ -3,10 +3,8 @@ import tomllib
 import flet as ft
 
 from package.components import navigation
-from package.database.database_obj import DataBaseObj
 from package.pages import pages_loader
 from package.util.resource_path import resource_path
-from package.database.pojo.translate_dic_pojo import TranslateDicPojo
 
 
 async def main(page: ft.Page):
