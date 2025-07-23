@@ -37,3 +37,30 @@ class DataBaseObj:
         # 确保目录存在
         data_dir.mkdir(parents=True, exist_ok=True)
         self.db = SqliteDatabase(str(data_dir / 'swisskitdb.db'))
+
+    def creat_table(self,models: list, need_check: bool=True, safe: bool = True):
+        try:
+            self.db.connect()
+            if need_check:
+                for model in models:
+                    if not model.table_exists():
+                        model.create_table(safe=safe)
+            else:
+                self.db.create_tables(models, safe=safe)
+        except Exception as e:
+            pass
+        finally:
+            if not self.db.is_closed():
+                self.db.close()
+
+    def drop_table(self,models: list, safe: bool = True):
+        try:
+            self.db.connect()
+            for model in models:
+                if model.table_exists():
+                    model.drop_table(safe=safe)
+        except Exception as e:
+            pass
+        finally:
+            if not self.db.is_closed():
+                self.db.close()
