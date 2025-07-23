@@ -1,5 +1,6 @@
 import flet as ft
 
+from .page.email import Email
 from .page.excel_split_v2 import ExcelSplitPageV2
 from .page.odap_formater import ODAPFormater
 from .page.odap_search_value import ODAPSearchValue
@@ -14,5 +15,7 @@ class PageFactory:
             return ExcelSplitPageV2(page)
         elif index == 2:
             return ODAPSearchValue(page)
+        elif index == 3:
+            return Email(page)
         else:
             raise ValueError("Unknown product type")
