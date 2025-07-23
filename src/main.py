@@ -6,6 +6,7 @@ from package.components import navigation
 from package.database.database_obj import DataBaseObj
 from package.pages import pages_loader
 from package.util.resource_path import resource_path
+from package.database.pojo.translate_dic_pojo import TranslateDicPojo
 
 
 async def main(page: ft.Page):
@@ -40,7 +41,6 @@ async def main(page: ft.Page):
     # 清除加载提示
     page.clean()
 
-    DataBaseObj().db.connect()
 
     # 添加主界面
     page.add(
