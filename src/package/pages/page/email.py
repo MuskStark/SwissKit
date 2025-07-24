@@ -1,8 +1,10 @@
+import re
+
 import flet as ft
 
+from ...database.database_obj import DataBaseObj
 from ...database.pojo.email_settings_config import EmailSettingConfig
 from ...pages.toolbox_page import ToolBoxPage
-from ...database.database_obj import DataBaseObj
 from ...util.log_util import get_logger
 
 
@@ -26,32 +28,66 @@ class Email(ToolBoxPage):
             self.page.update()
 
         def _save_settings(_drop_down: ft.Dropdown, _server: ft.Row, _auth: ft.Row):
-            self.logger.info('开始修改邮件设置')
-            self.database.creat_table([EmailSettingConfig])
-            # get all setting configs
-            server_type = _drop_down.value
-            server_url = _server.controls[0].value
-            server_port = _server.controls[1].value
-            ssl = _server.controls[2].value
-            user_name = _auth.controls[0].value
-            password = _auth.controls[1].value
+            dlg = ft.AlertDialog(
+                title=ft.Text("通知"),
+                content=ft.Text(""),
+                alignment=ft.alignment.center,
+                title_padding=ft.padding.all(25),
+            )
+            self.page.add(dlg)
+            try:
+                self.logger.info('开始修改邮件设置')
+                self.database.creat_table([EmailSettingConfig])
+                # get all setting configs
+                server_type = _drop_down.value
+                server_url = _server.controls[0].value
+                server_port = _server.controls[1].value
+                ssl = _server.controls[2].value
+                user_name = _auth.controls[0].value
+                password = _auth.controls[1].value
 
-            config = EmailSettingConfig.get_or_none(EmailSettingConfig.user_name == user_name)
-            if config:
-                config.server_type = server_type
-                config.sent_server_url = server_url
-                config.sent_server_port = server_port
-                config.sent_active_ssl = ssl
-                config.user_name = user_name
-                config.password = password
-            else:
-                config = EmailSettingConfig(server_type=server_type,
-                                            sent_server_url=server_url,
-                                            sent_server_port=server_port,
-                                            sent_active_ssl=ssl,
-                                            user_name=user_name,
-                                            password=password)
-            config.save()
+                # valid config
+                self.logger.info('开始验证配置合法性')
+                url_pattern = re.compile(
+                    r'^(https?://)?'  # http 或 https 协议
+                    r'(?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+'  # 域名
+                    r'(?:[A-Z]{2,6}\.?|[A-Z0-9-]{2,}\.?)|'  # 顶级域名
+                    r'localhost|'  # 本地主机
+                    r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})'  # IP 地址
+                    r'(?::\d+)?'  # 端口号
+                    r'(?:/?|[/?]\S+)$', re.IGNORECASE)  # 路径和查询参数
+                is_url = re.match(url_pattern, server_url)
+                is_port = 65535 >= 0 <= int(server_port)
+
+                if is_url and is_port:
+                    self.logger.info('已验证配置合法性')
+                    config = EmailSettingConfig.get_or_none(EmailSettingConfig.user_name == user_name)
+                    if config:
+                        config.server_type = server_type
+                        config.sent_server_url = server_url
+                        config.sent_server_port = server_port
+                        config.sent_active_ssl = ssl
+                        config.user_name = user_name
+                        config.password = password
+                    else:
+                        config = EmailSettingConfig(server_type=server_type,
+                                                    sent_server_url=server_url,
+                                                    sent_server_port=server_port,
+                                                    sent_active_ssl=ssl,
+                                                    user_name=user_name,
+                                                    password=password)
+                    config.save()
+                    self.logger.info('配置保存成功')
+                    dlg.content.value = '配置保存成功'
+                    dlg.update()
+                    self.page.open(dlg)
+                else:
+                    raise RuntimeError('配置合法性验证失败')
+            except Exception as e:
+                dlg.content.value = '配置保存失败，请查看系统日志'
+                dlg.update()
+                self.page.open(dlg)
+                self.logger.error(f'配置保存错误{e}', exc_info=True)
 
         drop_down = ft.Dropdown(
             label='选择验证模式',
@@ -66,14 +102,16 @@ class Email(ToolBoxPage):
                                   ft.TextField(label='请先选择验证模式', disabled=True),
                                   ft.Checkbox(label="启用加密链接")], expand=True)
         auth = ft.Row(controls=[ft.TextField(label='请输入邮箱账号'),
-                                ft.TextField(label='请输入密码', password=True, can_reveal_password=True)],expand=True)
+                                ft.TextField(label='请输入密码', password=True, can_reveal_password=True)], expand=True)
 
         return ft.Column(
             controls=[
                 drop_down,
                 server,
                 auth,
-                ft.Row(controls=[ft.ElevatedButton(text='保存配置', on_click=lambda _:_save_settings(drop_down,server,auth))], alignment=ft.MainAxisAlignment.CENTER,
+                ft.Row(controls=[
+                    ft.ElevatedButton(text='保存配置', on_click=lambda _: _save_settings(drop_down, server, auth))],
+                       alignment=ft.MainAxisAlignment.CENTER,
                        expand=True)
             ]
         )
