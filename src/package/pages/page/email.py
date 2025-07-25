@@ -77,19 +77,17 @@ class Email(ToolBoxPage):
                                                     password=password)
                     config.save()
                     self.logger.info('配置保存成功')
+                    self.page.dialog = dlg
                     dlg.content.value = '配置保存成功'
-                    dlg.update()
-                    self.page.open(dlg)
+                    dlg.open = True
+                    self.page.update()
                 else:
                     raise RuntimeError('配置合法性验证失败')
             except Exception as e:
-                # TODO: bug: when dlg open, then navigation will not working
-                # fix: page.dialog = dlg_modal
-                #      dlg_modal.open = True
-                #      page.update()
+                self.page.dialog = dlg
                 dlg.content.value = '配置保存失败，请查看系统日志'
-                dlg.update()
-                self.page.open(dlg)
+                dlg.open = True
+                self.page.update()
                 self.logger.error(f'配置保存错误{e}', exc_info=True)
 
         config_list = None
