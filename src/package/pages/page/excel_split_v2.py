@@ -97,7 +97,7 @@ class ExcelSplitPageV2(ToolBoxPage):
                     excel_obj = self.ExcelObject(file_path_text.value)
                     progress.update_status(ProgressStatus.LOADING, '开始解析Excel文件')
                     if not advance_model :
-                        all_sheets_dict = pd.read_excel(file_path, sheet_name=None)
+                        all_sheets_dict = pd.read_excel(file_path, sheet_name=None, dtype=str)
                         for sheet_name, sheet_data in all_sheets_dict.items():
                             sheet_obj = self.ExcelSheetObject(sheet_name,sheet_data.columns.tolist(), sheet_data)
                             excel_obj.add_sheet(sheet_name, sheet_obj)
