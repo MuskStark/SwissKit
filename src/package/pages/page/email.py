@@ -19,11 +19,11 @@ class Email(ToolBoxPage):
 
     def _setting_page(self) -> ft.Column:
         def on_dropdown_change(e, _server: ft.Row):
-            server_type_label = f'请输入{e.control.value}服务器地址'
-            server_port_label = f'请输入{e.control.value}服务端口'
-            _server.controls[0].label = server_type_label
+            _server_type_label = f'请输入{e.control.value}服务器地址'
+            _server_port_label = f'请输入{e.control.value}服务端口'
+            _server.controls[0].label = _server_type_label
             _server.controls[0].disabled = False
-            _server.controls[1].label = server_port_label
+            _server.controls[1].label = _server_port_label
             _server.controls[1].disabled = False
             self.page.update()
 
@@ -37,7 +37,6 @@ class Email(ToolBoxPage):
             self.page.add(dlg)
             try:
                 self.logger.info('开始修改邮件设置')
-                self.database.creat_table([EmailSettingConfig])
                 # get all setting configs
                 server_type = _drop_down.value
                 server_url = _server.controls[0].value
@@ -84,10 +83,31 @@ class Email(ToolBoxPage):
                 else:
                     raise RuntimeError('配置合法性验证失败')
             except Exception as e:
+                # TODO: bug: when dlg open, then navigation will not working
+                # fix: page.dialog = dlg_modal
+                #      dlg_modal.open = True
+                #      page.update()
                 dlg.content.value = '配置保存失败，请查看系统日志'
                 dlg.update()
                 self.page.open(dlg)
                 self.logger.error(f'配置保存错误{e}', exc_info=True)
+
+        config_list = None
+        if not EmailSettingConfig.table_exists():
+            self.database.creat_table([EmailSettingConfig])
+        else:
+            config_list = list(EmailSettingConfig.select())
+
+        _label = '请先选择验证模式'
+        user_name_label = '请输入邮箱账号'
+        password_label = '请输入密码'
+
+        sent_server_url_value = None
+        sent_server_port_value = None
+        sent_active_ssl_value = False
+        user_name_value = None
+        password_value = None
+
 
         drop_down = ft.Dropdown(
             label='选择验证模式',
@@ -98,11 +118,20 @@ class Email(ToolBoxPage):
             on_change=lambda e: on_dropdown_change(e, server),
             width=200
         )
-        server = ft.Row(controls=[ft.TextField(label='请先选择验证模式', disabled=True),
-                                  ft.TextField(label='请先选择验证模式', disabled=True),
-                                  ft.Checkbox(label="启用加密链接")], expand=True)
-        auth = ft.Row(controls=[ft.TextField(label='请输入邮箱账号'),
-                                ft.TextField(label='请输入密码', password=True, can_reveal_password=True)], expand=True)
+        # GET CONFIG FROM DATABASE
+        if config_list:
+            _label = '已生效配置'
+            drop_down.value = config_list[0].server_type
+            sent_server_url_value = config_list[0].sent_server_url
+            sent_server_port_value = config_list[0].sent_server_port
+            sent_active_ssl_value = config_list[0].sent_active_ssl
+            user_name_value = config_list[0].user_name
+            password_value = config_list[0].password
+        server = ft.Row(controls=[ft.TextField(label= _label,value=sent_server_url_value, disabled=True),
+                                  ft.TextField(label=_label,value=sent_server_port_value , disabled=True),
+                                  ft.Checkbox(label="启用加密链接",value=sent_active_ssl_value)], expand=True)
+        auth = ft.Row(controls=[ft.TextField(label=user_name_label, value=user_name_value),
+                                ft.TextField(label=password_label, value= password_value,password=True, can_reveal_password=True)], expand=True)
 
         return ft.Column(
             controls=[
