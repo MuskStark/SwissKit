@@ -2,6 +2,14 @@ import re
 
 import flet as ft
 
+import smtplib
+import ssl
+
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
+from email import encoders
+
 from ...database.database_obj import DataBaseObj
 from ...database.pojo.email_settings_config import EmailSettingConfig
 from ...pages.toolbox_page import ToolBoxPage
@@ -9,6 +17,34 @@ from ...util.log_util import get_logger
 
 
 class Email(ToolBoxPage):
+    class Postman:
+        def __init__(self, _email_config: EmailSettingConfig = None, _logger=get_logger(name='email')):
+            self.logger = _logger
+            # if _email_config is None, stop init PostMan
+            self.sent_server = None
+            try:
+                if _email_config is not None:
+                    self.logger.info("开始初始化邮差")
+                    if _email_config.server_type == 'smtp':
+                        if _email_config.sent_active_ssl:
+                            context = ssl.create_default_context()
+                            self.sent_server = smtplib.SMTP_SSL(
+                                _email_config.sent_server_url,
+                                _email_config.sent_server_port,
+                                timeout=30,
+                                context=context
+                            )
+                        else:
+                            self.sent_server = smtplib.SMTP(
+                                _email_config.sent_server_url,
+                                _email_config.sent_server_port,
+                                timeout=30,
+                            )
+                else:
+                    self.logger.error("无配置文件，无法完成邮差初始化")
+            except Exception as e:
+                self.logger.error(f'邮差初始化异常：{e}')
+
     def __init__(self, main_page: ft.Page):
         self.theme = {
             "text_color": ft.Colors.GREY_600
