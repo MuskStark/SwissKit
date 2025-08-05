@@ -143,12 +143,26 @@ class Email(ToolBoxPage):
             ]
         )
 
+    def _email_sent_page(self) -> ft.Column:
+
+        to_text_filed = ft.TextField(label='请输入收件人')
+        to_component = ft.Row(controls=[ft.Text('收件人'), to_text_filed], expand=True)
+        cc_text_filed = ft.TextField(label='请输入抄送人')
+        cc_component = ft.Row(controls=[ft.Text('抄送'), cc_text_filed], expand=True)
+        content_text_fild = ft.TextField(label="邮件正文", multiline=True)
+        return ft.Column(
+            controls=[to_component, cc_component, content_text_fild],
+            expand=True
+        )
+
     def gui(self):
         def on_tab_change(_e, _tabs):
+            if _e.control.selected_index == 0:
+                _tabs.tabs[0].content = self._email_sent_page()
             if _e.control.selected_index == 1:
                 _tabs.tabs[1].content = self._setting_page()
-                _tabs.update()
-                _e.page.update()
+            _tabs.update()
+            _e.page.update()
 
         tab = ft.Tabs(
             on_change=lambda e: on_tab_change(e, tab),
@@ -156,7 +170,7 @@ class Email(ToolBoxPage):
                 ft.Tab(
                     text='邮件发送',
                     content=ft.Container(
-                        content=ft.Container(),
+                        content=self._email_sent_page(),
                         padding=ft.padding.only(top=20),
                     ),
                 ),
