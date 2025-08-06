@@ -87,18 +87,18 @@ class Email(ToolBoxPage):
                 self.connection_active = False
                 self._connect_server()
 
-        def sent(self, _to, _cc_list, _subject, _body):
+        def sent(self, _to_list, _cc_list, _subject, _body):
             self.logger.info('开始发送邮件')
             try:
                 self._ensure_connection()
                 message = MIMEMultipart()
                 message['From'] = self.email_config.user_name
-                message['To'] = ', '.join(_to)
+                message['To'] = ', '.join(_to_list)
                 if _cc_list:
                     message['Cc'] = ', '.join(_cc_list)
                 message['Subject'] = _subject
                 message.attach(MIMEText(_body, 'plain'))
-                all_recipients = _to + (_cc_list if _cc_list else [])
+                all_recipients = _to_list + (_cc_list if _cc_list else [])
                 self.sent_server.sendmail(self.email_config.user_name, all_recipients, message.as_string())
                 self.logger.info('邮件发送成功')
             except Exception as e:
@@ -244,19 +244,30 @@ class Email(ToolBoxPage):
         if config_list:
             postman = self.Postman(_email_config=config_list[0], _logger=self.logger)
 
-        to_text_filed = ft.TextField(label='请输入收件人')
-        to_component = ft.Row(controls=[ft.Text('收件人'), to_text_filed], expand=True)
-        cc_text_filed = ft.TextField(label='请输入抄送人')
-        cc_component = ft.Row(controls=[ft.Text('抄送'), cc_text_filed], expand=True)
-        subject_text_fild = ft.TextField(label="邮件标题", multiline=False)
-        content_text_fild = ft.TextField(label="邮件正文", multiline=True)
+        to_text_field = ft.TextField(label='请输入收件人')
+        to_component = ft.Row(controls=[ft.Text('收件人'), to_text_field], expand=True)
+        cc_text_field = ft.TextField(label='请输入抄送人')
+        cc_component = ft.Row(controls=[ft.Text('抄送'), cc_text_field], expand=True)
+        subject_text_field = ft.TextField(label="邮件标题", multiline=False)
+        content_text_field = ft.TextField(label="邮件正文", multiline=True)
+
+        def _get_addr_list(_cc_text_file: ft.TextField):
+            cc = _cc_text_file.value
+            if not cc:
+                return []
+
+            if ';' in cc:
+                return [item.strip() for item in cc.split(';') if item.strip()]
+            else:
+                return [cc.strip()] if cc.strip() else []
 
         sent_button = ft.ElevatedButton(text='发送',
-                                        on_click=lambda _: postman.sent(to_text_filed.value, cc_text_filed.value,
-                                                                        subject_text_fild.value,
-                                                                        content_text_fild.value))
+                                        on_click=lambda _: postman.sent(_get_addr_list(to_text_field),
+                                                                        _get_addr_list(cc_text_field),
+                                                                        subject_text_field.value,
+                                                                        content_text_field.value))
         return ft.Column(
-            controls=[to_component, cc_component, subject_text_fild, content_text_fild, sent_button],
+            controls=[to_component, cc_component, subject_text_field, content_text_field, sent_button],
             expand=True
         )
 
