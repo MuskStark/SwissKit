@@ -158,13 +158,13 @@ class Email(ToolBoxPage):
         content_text_field = ft.TextField(label="邮件正文", multiline=True)
 
         files = ft.Ref[ft.Column]()
-        def file_picker_result(e: ft.FilePickerResultEvent):
+        def _file_picker_result(e: ft.FilePickerResultEvent):
             files.current.controls.clear()
             if e.files is not None:
                 for f in e.files:
-                    files.current.controls.append(ft.Row([ft.Text(f.name)]))
+                    files.current.controls.append(ft.Row([ft.Text(f.path)]))
             self.page.update()
-        file_picker = ft.FilePicker(on_result=file_picker_result)
+        file_picker = ft.FilePicker(on_result=_file_picker_result)
         self.page.overlay.append(file_picker)
 
         def _get_addr_list(_cc_text_file: ft.TextField):
@@ -177,16 +177,27 @@ class Email(ToolBoxPage):
             else:
                 return [cc.strip()] if cc.strip() else []
 
+        def _get_attachments_list(_files:ft.Ref[ft.Column]):
+            column_widget = _files.current
+            files_path_list = []
+            for control in column_widget.controls:
+                if isinstance(control, ft.Text):
+                    files_path_list.append(control.value)
+            return files_path_list
+
+            
+
         sent_button = ft.ElevatedButton(text='发送',
                                         on_click=lambda _: postman.sent(_get_addr_list(to_text_field),
                                                                         _get_addr_list(cc_text_field),
                                                                         subject_text_field.value,
-                                                                        content_text_field.value))
+                                                                        content_text_field.value,
+                                                                        _get_attachments_list(files)))
         return ft.Column(
             controls=[to_component, cc_component, subject_text_field, content_text_field,
                       ft.ElevatedButton(
-                          "Select files...",
-                          icon=ft.Icons.FOLDER_OPEN,
+                          "选择附件",
+                          icon=ft.Icons.ATTACH_FILE,
                           on_click=lambda _: file_picker.pick_files(allow_multiple=True),
                       ),
                       ft.Column(ref=files),
