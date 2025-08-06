@@ -27,13 +27,19 @@ class Email(ToolBoxPage):
                     self.logger.info("开始初始化邮差")
                     if self.email_config.server_type == 'smtp':
                         if self.email_config.sent_active_ssl:
-                            context = ssl.create_default_context()
-                            self.sent_server = smtplib.SMTP_SSL(
+                            self.sent_server = smtplib.SMTP(
                                 self.email_config.sent_server_url,
                                 self.email_config.sent_server_port,
-                                timeout=30,
-                                context=context
+                                timeout=30
                             )
+                            # send ehlo
+                            self.sent_server.ehlo()
+                            # enable TLS
+                            context = ssl.create_default_context()
+                            context.check_hostname = False
+                            context.verify_mode = ssl.CERT_NONE
+                            self.sent_server.starttls(context=context)
+                            self.sent_server.ehlo()
                         else:
                             self.sent_server = smtplib.SMTP(
                                 self.email_config.sent_server_url,
@@ -242,12 +248,15 @@ class Email(ToolBoxPage):
         to_component = ft.Row(controls=[ft.Text('收件人'), to_text_filed], expand=True)
         cc_text_filed = ft.TextField(label='请输入抄送人')
         cc_component = ft.Row(controls=[ft.Text('抄送'), cc_text_filed], expand=True)
+        subject_text_fild = ft.TextField(label="邮件标题", multiline=False)
         content_text_fild = ft.TextField(label="邮件正文", multiline=True)
 
         sent_button = ft.ElevatedButton(text='发送',
-                                        on_click=lambda _: postman.sent(to_text_filed.value, None, None, None))
+                                        on_click=lambda _: postman.sent(to_text_filed.value, cc_text_filed.value,
+                                                                        subject_text_fild.value,
+                                                                        content_text_fild.value))
         return ft.Column(
-            controls=[to_component, cc_component, content_text_fild, sent_button],
+            controls=[to_component, cc_component, subject_text_fild, content_text_fild, sent_button],
             expand=True
         )
 
