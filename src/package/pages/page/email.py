@@ -1,14 +1,10 @@
 import re
-
-import flet as ft
-
 import smtplib
 import ssl
-
-from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from email.mime.base import MIMEBase
-from email import encoders
+from email.mime.text import MIMEText
+
+import flet as ft
 
 from ...database.database_obj import DataBaseObj
 from ...database.pojo.email_settings_config import EmailSettingConfig
@@ -18,32 +14,90 @@ from ...util.log_util import get_logger
 
 class Email(ToolBoxPage):
     class Postman:
-        def __init__(self, _email_config: EmailSettingConfig = None, _logger=get_logger(name='email')):
+        def __init__(self, _email_config, _logger=get_logger(name='email')):
             self.logger = _logger
+            self.email_config = _email_config
             # if _email_config is None, stop init PostMan
             self.sent_server = None
+            # init status
+            self.complete_init = False
+            self.is_connected = False
             try:
-                if _email_config is not None:
+                if self.email_config:
                     self.logger.info("开始初始化邮差")
-                    if _email_config.server_type == 'smtp':
-                        if _email_config.sent_active_ssl:
+                    if self.email_config.server_type == 'smtp':
+                        if self.email_config.sent_active_ssl:
                             context = ssl.create_default_context()
                             self.sent_server = smtplib.SMTP_SSL(
-                                _email_config.sent_server_url,
-                                _email_config.sent_server_port,
+                                self.email_config.sent_server_url,
+                                self.email_config.sent_server_port,
                                 timeout=30,
                                 context=context
                             )
                         else:
                             self.sent_server = smtplib.SMTP(
-                                _email_config.sent_server_url,
-                                _email_config.sent_server_port,
+                                self.email_config.sent_server_url,
+                                self.email_config.sent_server_port,
                                 timeout=30,
                             )
+                        self.complete_init = True
+                        self.logger.info('邮差初始化成功')
                 else:
+                    self.complete_init = False
                     self.logger.error("无配置文件，无法完成邮差初始化")
             except Exception as e:
+                self.complete_init = False
                 self.logger.error(f'邮差初始化异常：{e}')
+
+        def _check_init_result(self) -> bool:
+            self.logger.info('开始检查邮差是否完成初始化')
+            if self.complete_init:
+                self.logger.info('通过邮差初始化检查')
+            else:
+                self.logger.error('未通过邮差初始化检查')
+            self.logger.info('完成邮差初始化检查')
+            return self.complete_init
+
+        def _connect_server(self):
+            self.logger.info('开始与Email服务器建立连接')
+            try:
+                if not self.is_connected:
+                    self.sent_server.login(self.email_config.user_name, self.email_config.password)
+                    self.is_connected = True
+                    self.logger.info('已成功建立连接')
+            except Exception as e:
+                self.logger.error(f'与Email服务器建立连接失败{e}')
+
+        def _ensure_connection(self):
+            if not hasattr(self, 'sent_server') or not self.is_connected:
+                self._connect_server()
+                return
+            try:
+                status = self.sent_server.noop()[0]
+                if status != 250:
+                    raise smtplib.SMTPException("Connection test failed")
+            except (smtplib.SMTPServerDisconnected, smtplib.SMTPException, AttributeError):
+                self.logger.info("连接已断开，正在重新连接...")
+                self.connection_active = False
+                self._connect_server()
+
+        def sent(self, _to, _cc_list, _subject, _body):
+            self.logger.info('开始发送邮件')
+            try:
+                self._ensure_connection()
+                message = MIMEMultipart()
+                message['From'] = self.email_config.user_name
+                message['To'] = ', '.join(_to)
+                if _cc_list:
+                    message['Cc'] = ', '.join(_cc_list)
+                message['Subject'] = _subject
+                message.attach(MIMEText(_body, 'plain'))
+                all_recipients = _to + (_cc_list if _cc_list else [])
+                self.sent_server.sendmail(self.email_config.user_name, all_recipients, message.as_string())
+                self.logger.info('邮件发送成功')
+            except Exception as e:
+                self.logger.error(f'邮件发送失败{e}')
+            pass
 
     def __init__(self, main_page: ft.Page):
         self.theme = {
@@ -142,7 +196,6 @@ class Email(ToolBoxPage):
         user_name_value = None
         password_value = None
 
-
         drop_down = ft.Dropdown(
             label='选择验证模式',
             options=[
@@ -161,11 +214,12 @@ class Email(ToolBoxPage):
             sent_active_ssl_value = config_list[0].sent_active_ssl
             user_name_value = config_list[0].user_name
             password_value = config_list[0].password
-        server = ft.Row(controls=[ft.TextField(label= _label,value=sent_server_url_value, disabled=True),
-                                  ft.TextField(label=_label,value=sent_server_port_value , disabled=True),
-                                  ft.Checkbox(label="启用加密链接",value=sent_active_ssl_value)], expand=True)
+        server = ft.Row(controls=[ft.TextField(label=_label, value=sent_server_url_value, disabled=True),
+                                  ft.TextField(label=_label, value=sent_server_port_value, disabled=True),
+                                  ft.Checkbox(label="启用加密链接", value=sent_active_ssl_value)], expand=True)
         auth = ft.Row(controls=[ft.TextField(label=user_name_label, value=user_name_value),
-                                ft.TextField(label=password_label, value= password_value,password=True, can_reveal_password=True)], expand=True)
+                                ft.TextField(label=password_label, value=password_value, password=True,
+                                             can_reveal_password=True)], expand=True)
 
         return ft.Column(
             controls=[
@@ -174,20 +228,26 @@ class Email(ToolBoxPage):
                 auth,
                 ft.Row(controls=[
                     ft.ElevatedButton(text='保存配置', on_click=lambda _: _save_settings(drop_down, server, auth))],
-                       alignment=ft.MainAxisAlignment.CENTER,
-                       expand=True)
+                    alignment=ft.MainAxisAlignment.CENTER,
+                    expand=True)
             ]
         )
 
     def _email_sent_page(self) -> ft.Column:
+        config_list = list(EmailSettingConfig.select())
+        if config_list:
+            postman = self.Postman(_email_config=config_list[0], _logger=self.logger)
 
         to_text_filed = ft.TextField(label='请输入收件人')
         to_component = ft.Row(controls=[ft.Text('收件人'), to_text_filed], expand=True)
         cc_text_filed = ft.TextField(label='请输入抄送人')
         cc_component = ft.Row(controls=[ft.Text('抄送'), cc_text_filed], expand=True)
         content_text_fild = ft.TextField(label="邮件正文", multiline=True)
+
+        sent_button = ft.ElevatedButton(text='发送',
+                                        on_click=lambda _: postman.sent(to_text_filed.value, None, None, None))
         return ft.Column(
-            controls=[to_component, cc_component, content_text_fild],
+            controls=[to_component, cc_component, content_text_fild, sent_button],
             expand=True
         )
 
