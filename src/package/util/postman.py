@@ -1,14 +1,13 @@
+import mimetypes
 import smtplib
 import ssl
-import mimetypes
-
-from pathlib import Path
-from email.mime.base import MIMEBase
 from email import encoders
+from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from pathlib import Path
 
-from log_util import get_logger
+from .log_util import get_logger
 
 
 class Postman:
@@ -118,7 +117,7 @@ class Postman:
                 self.logger.error(f'添加附件失败 {file_path}: {e}')
                 continue
 
-    def sent(self, _to_list, _cc_list, _subject, _body, attachments):
+    def sent(self, _to_list, _cc_list, _subject, _body, attachments=None):
         self.logger.info('开始发送邮件')
         try:
             self._ensure_connection()
