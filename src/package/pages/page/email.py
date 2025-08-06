@@ -1,8 +1,4 @@
 import re
-import smtplib
-import ssl
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 
 import flet as ft
 
@@ -10,100 +6,10 @@ from ...database.database_obj import DataBaseObj
 from ...database.pojo.email_settings_config import EmailSettingConfig
 from ...pages.toolbox_page import ToolBoxPage
 from ...util.log_util import get_logger
+from ...util.postman import Postman
 
 
 class Email(ToolBoxPage):
-    class Postman:
-        def __init__(self, _email_config, _logger=get_logger(name='email')):
-            self.logger = _logger
-            self.email_config = _email_config
-            # if _email_config is None, stop init PostMan
-            self.sent_server = None
-            # init status
-            self.complete_init = False
-            self.is_connected = False
-            try:
-                if self.email_config:
-                    self.logger.info("开始初始化邮差")
-                    if self.email_config.server_type == 'smtp':
-                        if self.email_config.sent_active_ssl:
-                            self.sent_server = smtplib.SMTP(
-                                self.email_config.sent_server_url,
-                                self.email_config.sent_server_port,
-                                timeout=30
-                            )
-                            # send ehlo
-                            self.sent_server.ehlo()
-                            # enable TLS
-                            context = ssl.create_default_context()
-                            context.check_hostname = False
-                            context.verify_mode = ssl.CERT_NONE
-                            self.sent_server.starttls(context=context)
-                            self.sent_server.ehlo()
-                        else:
-                            self.sent_server = smtplib.SMTP(
-                                self.email_config.sent_server_url,
-                                self.email_config.sent_server_port,
-                                timeout=30,
-                            )
-                        self.complete_init = True
-                        self.logger.info('邮差初始化成功')
-                else:
-                    self.complete_init = False
-                    self.logger.error("无配置文件，无法完成邮差初始化")
-            except Exception as e:
-                self.complete_init = False
-                self.logger.error(f'邮差初始化异常：{e}')
-
-        def _check_init_result(self) -> bool:
-            self.logger.info('开始检查邮差是否完成初始化')
-            if self.complete_init:
-                self.logger.info('通过邮差初始化检查')
-            else:
-                self.logger.error('未通过邮差初始化检查')
-            self.logger.info('完成邮差初始化检查')
-            return self.complete_init
-
-        def _connect_server(self):
-            self.logger.info('开始与Email服务器建立连接')
-            try:
-                if not self.is_connected:
-                    self.sent_server.login(self.email_config.user_name, self.email_config.password)
-                    self.is_connected = True
-                    self.logger.info('已成功建立连接')
-            except Exception as e:
-                self.logger.error(f'与Email服务器建立连接失败{e}')
-
-        def _ensure_connection(self):
-            if not hasattr(self, 'sent_server') or not self.is_connected:
-                self._connect_server()
-                return
-            try:
-                status = self.sent_server.noop()[0]
-                if status != 250:
-                    raise smtplib.SMTPException("Connection test failed")
-            except (smtplib.SMTPServerDisconnected, smtplib.SMTPException, AttributeError):
-                self.logger.info("连接已断开，正在重新连接...")
-                self.connection_active = False
-                self._connect_server()
-
-        def sent(self, _to_list, _cc_list, _subject, _body):
-            self.logger.info('开始发送邮件')
-            try:
-                self._ensure_connection()
-                message = MIMEMultipart()
-                message['From'] = self.email_config.user_name
-                message['To'] = ', '.join(_to_list)
-                if _cc_list:
-                    message['Cc'] = ', '.join(_cc_list)
-                message['Subject'] = _subject
-                message.attach(MIMEText(_body, 'plain'))
-                all_recipients = _to_list + (_cc_list if _cc_list else [])
-                self.sent_server.sendmail(self.email_config.user_name, all_recipients, message.as_string())
-                self.logger.info('邮件发送成功')
-            except Exception as e:
-                self.logger.error(f'邮件发送失败{e}')
-            pass
 
     def __init__(self, main_page: ft.Page):
         self.theme = {
@@ -242,7 +148,7 @@ class Email(ToolBoxPage):
     def _email_sent_page(self) -> ft.Column:
         config_list = list(EmailSettingConfig.select())
         if config_list:
-            postman = self.Postman(_email_config=config_list[0], _logger=self.logger)
+            postman = Postman(_email_config=config_list[0], _logger=self.logger)
 
         to_text_field = ft.TextField(label='请输入收件人')
         to_component = ft.Row(controls=[ft.Text('收件人'), to_text_field], expand=True)
@@ -250,6 +156,16 @@ class Email(ToolBoxPage):
         cc_component = ft.Row(controls=[ft.Text('抄送'), cc_text_field], expand=True)
         subject_text_field = ft.TextField(label="邮件标题", multiline=False)
         content_text_field = ft.TextField(label="邮件正文", multiline=True)
+
+        files = ft.Ref[ft.Column]()
+        def file_picker_result(e: ft.FilePickerResultEvent):
+            files.current.controls.clear()
+            if e.files is not None:
+                for f in e.files:
+                    files.current.controls.append(ft.Row([ft.Text(f.name)]))
+            self.page.update()
+        file_picker = ft.FilePicker(on_result=file_picker_result)
+        self.page.overlay.append(file_picker)
 
         def _get_addr_list(_cc_text_file: ft.TextField):
             cc = _cc_text_file.value
@@ -267,7 +183,14 @@ class Email(ToolBoxPage):
                                                                         subject_text_field.value,
                                                                         content_text_field.value))
         return ft.Column(
-            controls=[to_component, cc_component, subject_text_field, content_text_field, sent_button],
+            controls=[to_component, cc_component, subject_text_field, content_text_field,
+                      ft.ElevatedButton(
+                          "Select files...",
+                          icon=ft.Icons.FOLDER_OPEN,
+                          on_click=lambda _: file_picker.pick_files(allow_multiple=True),
+                      ),
+                      ft.Column(ref=files),
+                      sent_button],
             expand=True
         )
 
