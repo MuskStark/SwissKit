@@ -255,16 +255,18 @@ class Email(ToolBoxPage):
                 e.control.update()
 
             # options query from database
-            group_options = []
+            dropdown_options = None
             if not EmailGroup.table_exists():
                 self.database.creat_table([EmailGroup])
             else:
+                group_options = []
                 group_list = list(EmailGroup.select())
                 for group in group_list:
-                    group_options.append(group.name)
+                    group_options.append(group.group_name)
+                dropdown_options = [ft.DropdownOption(value) for value in group_options]
             group_dropdown = ft.Dropdown(
                 label="选择分组",
-                options=group_options,
+                options=dropdown_options,
                 on_change=_tag_dropdown_changed,
                 width=300
             )
