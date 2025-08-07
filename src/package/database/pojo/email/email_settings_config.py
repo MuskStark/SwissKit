@@ -1,6 +1,6 @@
 from peewee import CharField, IntegerField, BooleanField
 
-from src.package.database.pojo.pojo import PojoBase
+from ....database.pojo.pojo import PojoBase
 
 
 class EmailSettingConfig(PojoBase):
