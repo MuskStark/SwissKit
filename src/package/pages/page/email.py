@@ -216,7 +216,8 @@ class Email(ToolBoxPage):
         )
         self.page.add(dlg)
 
-        def _modify_email_address_info(_dlg):
+        def _modify_email_address_info(_dlg, _dil_title:str = None):
+            dlg.title.value = _dil_title
             tag_list = []
             tag_display = ft.Row(wrap=True)
             address = ft.TextField(label='请输入邮件地址')
@@ -254,6 +255,11 @@ class Email(ToolBoxPage):
                 e.control.value = None  # 重置选择
                 e.control.update()
 
+            def _modify_email_address():
+                # TODO: save address info into database
+                pass
+
+            # dlg ui
             # options query from database
             dropdown_options = None
             if not EmailGroup.table_exists():
@@ -264,15 +270,17 @@ class Email(ToolBoxPage):
                 for group in group_list:
                     group_options.append(group.group_name)
                 dropdown_options = [ft.DropdownOption(value) for value in group_options]
+
             group_dropdown = ft.Dropdown(
                 label="选择分组",
                 options=dropdown_options,
                 on_change=_tag_dropdown_changed,
                 width=300
             )
-
+            save_bt = ft.ElevatedButton('新增')
             content = ft.Column(controls=[address,
                                           ft.Row(controls=[group_dropdown, tag_display], expand=True),
+                                          save_bt
 
                                           ])
             self.page.dialog = _dlg
@@ -280,7 +288,8 @@ class Email(ToolBoxPage):
             _dlg.open = True
             self.page.update()
 
-        email_address_bt = ft.ElevatedButton('新增邮件地址', on_click=lambda _: _modify_email_address_info(dlg))
+        # ui code
+        email_address_bt = ft.ElevatedButton('新增邮件地址', on_click=lambda _: _modify_email_address_info(dlg,'邮件地址维护'))
         table = ft.DataTable(
             width=700,
             border=ft.border.all(2, ft.Colors.GREY_300),
