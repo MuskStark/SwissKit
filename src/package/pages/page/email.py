@@ -3,7 +3,8 @@ import re
 import flet as ft
 
 from ...database.database_obj import DataBaseObj
-from ...database.pojo.email_settings_config import EmailSettingConfig
+from ...database.pojo.email.email_group import EmailGroup
+from ...database.pojo.email.email_settings_config import EmailSettingConfig
 from ...pages.toolbox_page import ToolBoxPage
 from ...util.log_util import get_logger
 from ...util.postman import Postman
@@ -112,7 +113,7 @@ class Email(ToolBoxPage):
             label='选择验证模式',
             options=[
                 ft.dropdown.Option("smtp"),
-                ft.dropdown.Option("pop3"),
+                # ft.dropdown.Option("pop3"),
             ],
             on_change=lambda e: on_dropdown_change(e, server),
             width=200
@@ -158,12 +159,14 @@ class Email(ToolBoxPage):
         content_text_field = ft.TextField(label="邮件正文", multiline=True)
 
         files = ft.Ref[ft.Column]()
+
         def _file_picker_result(e: ft.FilePickerResultEvent):
             files.current.controls.clear()
             if e.files is not None:
                 for f in e.files:
                     files.current.controls.append(ft.Row([ft.Text(f.path)]))
             self.page.update()
+
         file_picker = ft.FilePicker(on_result=_file_picker_result)
         self.page.overlay.append(file_picker)
 
@@ -177,15 +180,13 @@ class Email(ToolBoxPage):
             else:
                 return [cc.strip()] if cc.strip() else []
 
-        def _get_attachments_list(_files:ft.Ref[ft.Column]):
+        def _get_attachments_list(_files: ft.Ref[ft.Column]):
             column_widget = _files.current
             files_path_list = []
             for control in column_widget.controls:
                 if isinstance(control, ft.Text):
                     files_path_list.append(control.value)
             return files_path_list
-
-            
 
         sent_button = ft.ElevatedButton(text='发送',
                                         on_click=lambda _: postman.sent(_get_addr_list(to_text_field),
@@ -205,12 +206,115 @@ class Email(ToolBoxPage):
             expand=True
         )
 
+    def _email_group_page(self) -> ft.Column:
+        # setting dlg page
+        dlg = ft.AlertDialog(
+            title=ft.Text(),
+            content=ft.Container(),
+            alignment=ft.alignment.center,
+            title_padding=ft.padding.all(25),
+        )
+        self.page.add(dlg)
+
+        def _modify_email_address_info(_dlg):
+            tag_list = []
+            tag_display = ft.Row(wrap=True)
+            address = ft.TextField(label='请输入邮件地址')
+
+            def _update_tag_display():
+                tag_display.controls.clear()
+                for item in tag_list:
+                    chip = ft.Container(
+                        content=ft.Row([
+                            ft.Text(item, size=14),
+                            ft.IconButton(
+                                icon=ft.Icons.CLOSE,
+                                icon_size=16,
+                                on_click=lambda e, item=item: _remove_item(item),
+                                tooltip="删除"
+                            )
+                        ], tight=True),
+                        padding=ft.padding.symmetric(horizontal=8, vertical=4),
+                        bgcolor=ft.Colors.BLUE_100,
+                        border_radius=16,
+                        margin=ft.margin.only(right=4, bottom=4)
+                    )
+                    tag_display.controls.append(chip)
+                tag_display.update()
+
+            def _remove_item(item):
+                if item in tag_list:
+                    tag_list.remove(item)
+                    _update_tag_display()
+
+            def _tag_dropdown_changed(e):
+                if e.control.value and e.control.value not in tag_list:
+                    tag_list.append(e.control.value)
+                    _update_tag_display()
+                e.control.value = None  # 重置选择
+                e.control.update()
+
+            # options query from database
+            group_options = []
+            if not EmailGroup.table_exists():
+                self.database.creat_table([EmailGroup])
+            else:
+                group_list = list(EmailGroup.select())
+                for group in group_list:
+                    group_options.append(group.name)
+            group_dropdown = ft.Dropdown(
+                label="选择分组",
+                options=group_options,
+                on_change=_tag_dropdown_changed,
+                width=300
+            )
+
+            content = ft.Column(controls=[address,
+                                          ft.Row(controls=[group_dropdown, tag_display], expand=True),
+
+                                          ])
+            self.page.dialog = _dlg
+            _dlg.content.content = content
+            _dlg.open = True
+            self.page.update()
+
+        email_address_bt = ft.ElevatedButton('新增邮件地址', on_click=lambda _: _modify_email_address_info(dlg))
+        table = ft.DataTable(
+            width=700,
+            border=ft.border.all(2, ft.Colors.GREY_300),
+            border_radius=4,
+            vertical_lines=ft.border.BorderSide(1, ft.Colors.GREY_300),
+            horizontal_lines=ft.border.BorderSide(1, ft.Colors.GREY_300),
+            heading_row_height=100,
+            data_row_color={ft.ControlState.HOVERED: "0x30FF0000"},
+            divider_thickness=0,
+            column_spacing=200,
+            columns=[
+                ft.DataColumn(
+                    ft.Text("邮件地址"),
+                ),
+                ft.DataColumn(
+                    ft.Text("标签"),
+                ),
+            ],
+            rows=[
+                ft.DataRow(
+                    [ft.DataCell(ft.Text("A")), ft.DataCell(ft.Text("1"))],
+                    on_select_changed=lambda e: print(f"row select changed: {e.data}"),
+                ),
+                ft.DataRow([ft.DataCell(ft.Text("B")), ft.DataCell(ft.Text("2"))]),
+            ],
+        )
+        return ft.Column(controls=[email_address_bt, table], expand=True)
+
     def gui(self):
         def on_tab_change(_e, _tabs):
             if _e.control.selected_index == 0:
                 _tabs.tabs[0].content = self._email_sent_page()
             if _e.control.selected_index == 1:
-                _tabs.tabs[1].content = self._setting_page()
+                _tabs.tabs[1].content = self._email_group_page()
+            if _e.control.selected_index == 2:
+                _tabs.tabs[2].content = self._setting_page()
             _tabs.update()
             _e.page.update()
 
@@ -225,12 +329,19 @@ class Email(ToolBoxPage):
                     ),
                 ),
                 ft.Tab(
+                    text='邮件分组设置',
+                    content=ft.Container(
+                        content=ft.Container(),
+                        padding=ft.padding.only(top=20),
+                    ),
+                ),
+                ft.Tab(
                     text='邮件设置',
                     content=ft.Container(
                         content=ft.Container(),
                         padding=ft.padding.only(top=20),
                     ),
-                )
+                ),
             ]
         )
         return tab
