@@ -6,13 +6,14 @@ from pathlib import Path
 
 from peewee import SqliteDatabase
 
+from ..util.log_util import get_logger
 from ..util.path_util import PathUtil
 
 
 @lru_cache(maxsize=None)
 class DataBaseObj:
     def __init__(self):
-        """获取数据存储目录（推荐用于数据库等持久化数据）"""
+        self.logger = get_logger('DataBase')
         system = platform.system()
 
         if PathUtil.is_flet_packaged():
@@ -38,22 +39,31 @@ class DataBaseObj:
         data_dir.mkdir(parents=True, exist_ok=True)
         self.db = SqliteDatabase(str(data_dir / 'swisskitdb.db'))
 
-    def creat_table(self,models: list, need_check: bool=True, safe: bool = True):
+    def creat_table(self, models: list, need_check: bool = True, safe: bool = True):
+        self.logger.info("开始创建数据表")
+        connection_was_closed = self.db.is_closed()
         try:
-            self.db.connect()
+            if connection_was_closed:
+                self.logger.info("数据库连接已关闭，正在连接...")
+                self.db.connect()
+            else:
+                self.logger.info("数据库连接已存在，跳过连接步骤")
             if need_check:
                 for model in models:
+                    self.logger.info(f'开始检查{model}是否存在')
                     if not model.table_exists():
+                        self.logger.info(f'开始创建{model}')
                         model.create_table(safe=safe)
             else:
+                self.logger.info(f'开始创建{models}')
                 self.db.create_tables(models, safe=safe)
         except Exception as e:
-            pass
+            self.logger.error(f'创建失败{e}')
         finally:
             if not self.db.is_closed():
                 self.db.close()
 
-    def drop_table(self,models: list, safe: bool = True):
+    def drop_table(self, models: list, safe: bool = True):
         try:
             self.db.connect()
             for model in models:
