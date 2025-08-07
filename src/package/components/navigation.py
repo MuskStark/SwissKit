@@ -59,8 +59,8 @@ def navigation_gui(
                 label="Sql待查询值生成",
             ),
             ft.NavigationRailDestination(
-                icon=ft.Icons.QUERY_STATS_OUTLINED,
-                selected_icon=ft.Icons.QUERY_STATS,
+                icon=ft.Icons.EMAIL_OUTLINED,
+                selected_icon=ft.Icons.EMAIL,
                 label="邮件批量发送",
             )
         ],
