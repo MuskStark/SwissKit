@@ -3,6 +3,7 @@ import re
 import flet as ft
 
 from ...database.database_obj import DataBaseObj
+from ...database.pojo.email.email_address import EmailAddressInfo
 from ...database.pojo.email.email_group import EmailGroup
 from ...database.pojo.email.email_settings_config import EmailSettingConfig
 from ...pages.toolbox_page import ToolBoxPage
@@ -216,7 +217,8 @@ class Email(ToolBoxPage):
         )
         self.page.add(dlg)
 
-        def _modify_email_address_info(_dlg, _dil_title:str = None):
+        def _modify_email_address_info(_dlg, _dil_title: str = None):
+            # TODO:update page when finished modify address info
             dlg.title.value = _dil_title
             tag_list = []
             tag_display = ft.Row(wrap=True)
@@ -256,8 +258,15 @@ class Email(ToolBoxPage):
                 e.control.update()
 
             def _modify_email_address():
-                # TODO: save address info into database
-                pass
+                self.database.creat_table([EmailAddressInfo])
+                info = EmailAddressInfo.get_or_none(EmailAddressInfo.email_address == address.value)
+                if info is None:
+                    info = EmailAddressInfo()
+                if tag_list:
+                    info.email_tag = str(tag_list)
+                if address.value:
+                    info.email_address = address.value
+                info.save()
 
             # dlg ui
             # options query from database
@@ -277,7 +286,7 @@ class Email(ToolBoxPage):
                 on_change=_tag_dropdown_changed,
                 width=300
             )
-            save_bt = ft.ElevatedButton('新增')
+            save_bt = ft.ElevatedButton('新增', on_click=lambda _: _modify_email_address())
             content = ft.Column(controls=[address,
                                           ft.Row(controls=[group_dropdown, tag_display], expand=True),
                                           save_bt
@@ -289,7 +298,19 @@ class Email(ToolBoxPage):
             self.page.update()
 
         # ui code
-        email_address_bt = ft.ElevatedButton('新增邮件地址', on_click=lambda _: _modify_email_address_info(dlg,'邮件地址维护'))
+        email_address_bt = ft.ElevatedButton('新增邮件地址',
+                                             on_click=lambda _: _modify_email_address_info(dlg, '邮件地址维护'))
+        # load data from database
+        address_list = list(EmailAddressInfo.select())
+        table_row_list = []
+        if address_list:
+            for addr in address_list:
+                table_row_list.append(ft.DataRow(
+                    [ft.DataCell(ft.Text(addr.email_address)), ft.DataCell(ft.Text(addr.email_tag))],
+                    on_select_changed=lambda e: print(f"row select changed: {e}"),
+                ))
+        else:
+            table_row_list = None
         table = ft.DataTable(
             width=700,
             border=ft.border.all(2, ft.Colors.GREY_300),
@@ -308,13 +329,7 @@ class Email(ToolBoxPage):
                     ft.Text("标签"),
                 ),
             ],
-            rows=[
-                ft.DataRow(
-                    [ft.DataCell(ft.Text("A")), ft.DataCell(ft.Text("1"))],
-                    on_select_changed=lambda e: print(f"row select changed: {e.data}"),
-                ),
-                ft.DataRow([ft.DataCell(ft.Text("B")), ft.DataCell(ft.Text("2"))]),
-            ],
+            rows=table_row_list,
         )
         return ft.Column(controls=[email_address_bt, table], expand=True)
 
