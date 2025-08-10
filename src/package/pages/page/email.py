@@ -214,11 +214,27 @@ class Email(ToolBoxPage):
             content=ft.Container(),
             alignment=ft.alignment.center,
             title_padding=ft.padding.all(25),
+            on_dismiss= lambda _: _update_data_table(table)
         )
         self.page.add(dlg)
 
+        def _update_data_table(_table: ft.DataTable):
+            # load data from database
+            self.database.creat_table([EmailAddressInfo])
+            address_list = list(EmailAddressInfo.select())
+            table_row_list = []
+            if address_list:
+                for addr in address_list:
+                    table_row_list.append(ft.DataRow(
+                        [ft.DataCell(ft.Text(addr.email_address)), ft.DataCell(ft.Text(addr.email_tag))],
+                        on_select_changed=lambda e: print(f"row select changed: {e}"),
+                    ))
+            else:
+                table_row_list = None
+            _table.rows = table_row_list
+            self.page.update()
+
         def _modify_email_address_info(_dlg, _dil_title: str = None):
-            # TODO:update page when finished modify address info
             dlg.title.value = _dil_title
             tag_list = []
             tag_display = ft.Row(wrap=True)
@@ -300,17 +316,6 @@ class Email(ToolBoxPage):
         # ui code
         email_address_bt = ft.ElevatedButton('新增邮件地址',
                                              on_click=lambda _: _modify_email_address_info(dlg, '邮件地址维护'))
-        # load data from database
-        address_list = list(EmailAddressInfo.select())
-        table_row_list = []
-        if address_list:
-            for addr in address_list:
-                table_row_list.append(ft.DataRow(
-                    [ft.DataCell(ft.Text(addr.email_address)), ft.DataCell(ft.Text(addr.email_tag))],
-                    on_select_changed=lambda e: print(f"row select changed: {e}"),
-                ))
-        else:
-            table_row_list = None
         table = ft.DataTable(
             width=700,
             border=ft.border.all(2, ft.Colors.GREY_300),
@@ -329,8 +334,9 @@ class Email(ToolBoxPage):
                     ft.Text("标签"),
                 ),
             ],
-            rows=table_row_list,
+            rows=None,
         )
+        _update_data_table(table)
         return ft.Column(controls=[email_address_bt, table], expand=True)
 
     def gui(self):
