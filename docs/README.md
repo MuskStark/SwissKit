@@ -91,6 +91,12 @@ flet build windows -v
 
 ## 更新日志
 
+### [0.3.0](https://github.com/MuskStark/SwissKit/tree/v0.3.0)
+
+新增
+
+- 新增基于标签分组的邮件群发工具
+
 ### [0.2.2.2](https://github.com/MuskStark/SwissKit/tree/v0.2.2.2)
 
 BugFix
