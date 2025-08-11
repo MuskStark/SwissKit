@@ -158,10 +158,6 @@ class Email(ToolBoxPage):
     def _email_sent_page(self) -> ft.Column:
         self.logger.info('开始初始化邮件发送界面')
         self.logger.info('开始查询邮件配置信息')
-        config_list = list(EmailSettingConfig.select())
-        if config_list:
-            self.logger.info('使用邮件配置信息初始化邮差')
-            postman = Postman(_email_config=config_list[0], _logger=self.logger)
 
         to_text_field = ft.TextField(label='请输入收件人')
         to_component = ft.Row(controls=[ft.Text('收件人'), to_text_field], expand=True)
@@ -200,12 +196,24 @@ class Email(ToolBoxPage):
                     files_path_list.append(control.value)
             return files_path_list
 
+        def _sent_email():
+            if EmailSettingConfig.table_exists():
+                config_list = list(EmailSettingConfig.select())
+                if config_list:
+                    self.logger.info('使用邮件配置信息初始化邮差')
+                    postman = Postman(_email_config=config_list[0], _logger=self.logger)
+                    postman.sent(_get_addr_list(to_text_field),
+                                 _get_addr_list(cc_text_field),
+                                 subject_text_field.value,
+                                 content_text_field.value,
+                                 _get_attachments_list(files))
+                else:
+                    self.logger.warning('无配置文件，无法初始化邮差')
+            else:
+                self.logger.error('无数据表，无法初始化邮差')
+
         sent_button = ft.ElevatedButton(text='发送',
-                                        on_click=lambda _: postman.sent(_get_addr_list(to_text_field),
-                                                                        _get_addr_list(cc_text_field),
-                                                                        subject_text_field.value,
-                                                                        content_text_field.value,
-                                                                        _get_attachments_list(files)))
+                                        on_click=lambda _: _sent_email())
         self.logger.info('完成邮件发送界面UI初始化')
         return ft.Column(
             controls=[to_component, cc_component, subject_text_field, content_text_field,
