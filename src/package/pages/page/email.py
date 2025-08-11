@@ -228,18 +228,28 @@ class Email(ToolBoxPage):
         )
 
     def _email_group_page(self) -> ft.Container:
-        # setting dlg page
-        self.logger.info('开始初始化邮件分组界面')
-        dlg = ft.AlertDialog(
-            title=ft.Text(),
-            content=ft.Container(),
-            alignment=ft.alignment.center,
-            title_padding=ft.padding.all(25),
-            on_dismiss=lambda _: _update_data_table(table)
-        )
-        self.page.add(dlg)
-
+        # function area
         def _update_data_table(_table: ft.DataTable):
+            """
+            Update the data table with email address information from the database.
+
+            Summary:
+            This function updates a given DataTable with email address and tag information
+            retrieved from the database. It logs the start and completion of the update process.
+            The function queries the database for email addresses, creates a list of rows,
+            and assigns these to the provided DataTable. The page is then refreshed to reflect
+            the changes.
+
+            Args:
+                _table (ft.DataTable): The DataTable to be updated with email address information.
+
+            Raises:
+                Any exceptions that may occur during the database operation or while updating
+                the table will propagate up to the caller.
+
+            Returns:
+                None
+            """
             # load data from database
             self.logger.info('开始更新邮件地址分组信息表')
             self.database.creat_table([EmailAddressInfo])
@@ -258,8 +268,26 @@ class Email(ToolBoxPage):
             self.logger.info('完成邮件地址分组信息表更新')
 
         def _modify_email_address_info(_dlg, _dil_title: str = None):
+            """
+            Modifies the email address information in a dialog, allowing for the addition and removal of tags associated with an email address.
+
+            Summary:
+            This function updates the title of the provided dialog, initializes a text field for email input, and sets up a row for displaying tags. It also defines internal functions to update the tag display, remove items from the tag list, handle dropdown changes, and modify the email address information in the database. The UI components, including a dropdown for selecting groups and a save button, are then added to the dialog, which is opened for user interaction.
+
+            Parameters:
+            - _dlg: Dialog
+              The dialog object to be modified and displayed.
+            - _dil_title: str, optional
+              The title to set for the dialog. Defaults to None.
+
+            Raises:
+            - None
+
+            Returns:
+            - None
+            """
             self.logger.info('开始维护邮件分组信息')
-            dlg.title.value = _dil_title
+            _dlg.title.value = _dil_title
             tag_list = []
             tag_display = ft.Row(wrap=True)
             address = ft.TextField(label='请输入邮件地址')
@@ -339,9 +367,27 @@ class Email(ToolBoxPage):
             _dlg.open = True
             self.page.update()
 
-        # ui code
-        email_address_bt = ft.ElevatedButton('新增邮件地址',
-                                             on_click=lambda _: _modify_email_address_info(dlg, '邮件地址维护'))
+        def _modify_group_info(_dlg, _dil_title: str = None):
+            # function area
+
+            # ui code
+            _dlg.title = _dil_title
+            # group info ui
+
+        #  dlg page
+        self.logger.info('开始初始化邮件分组界面')
+        dlg = ft.AlertDialog(
+            title=ft.Text(),
+            content=ft.Container(),
+            alignment=ft.alignment.center,
+            title_padding=ft.padding.all(25),
+            on_dismiss=lambda _: _update_data_table(table)
+        )
+        self.page.add(dlg)
+
+        # page ui code
+        email_address_bt = ft.ElevatedButton('维护邮件地址',on_click=lambda _: _modify_email_address_info(dlg, '邮件地址维护'))
+        group_info_bt = ft.ElevatedButton('维护分组信息', on_click=lambda _: _modify_group_info(dlg, '分组信息维护'))
         table = ft.DataTable(
             width=700,
             border=ft.border.all(2, ft.Colors.GREY_300),
@@ -357,7 +403,7 @@ class Email(ToolBoxPage):
                     ft.Text("邮件地址"),
                 ),
                 ft.DataColumn(
-                    ft.Text("标签"),
+                    ft.Text("分组"),
                 ),
             ],
             rows=None,
@@ -365,7 +411,7 @@ class Email(ToolBoxPage):
         _update_data_table(table)
         self.logger.info('完成初始化邮件分组界面UI')
         return ft.Container(
-            content= ft.Column(controls=[email_address_bt, table],expand=True),
+            content= ft.Column(controls=[ft.Row(controls=[email_address_bt, group_info_bt], spacing=15,expand=True),table],expand=True),
             margin=ft.Margin(left=0,right=0,top=20,bottom=0)
         )
 
