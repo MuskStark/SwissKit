@@ -22,6 +22,8 @@ class Email(ToolBoxPage):
         self.logger = get_logger(name='email')
 
     def _setting_page(self) -> ft.Column:
+        self.logger.info('开始初始化邮件配置界面')
+
         def on_dropdown_change(e, _server: ft.Row):
             _server_type_label = f'请输入{e.control.value}服务器地址'
             _server_port_label = f'请输入{e.control.value}服务端口'
@@ -32,6 +34,7 @@ class Email(ToolBoxPage):
             self.page.update()
 
         def _save_settings(_drop_down: ft.Dropdown, _server: ft.Row, _auth: ft.Row):
+            self.logger.info('开始邮件配置')
             dlg = ft.AlertDialog(
                 title=ft.Text("通知"),
                 content=ft.Text(""),
@@ -93,11 +96,16 @@ class Email(ToolBoxPage):
                 dlg.open = True
                 self.page.update()
                 self.logger.error(f'配置保存错误{e}', exc_info=True)
+            finally:
+                self.logger.info('完成邮件配置')
 
         config_list = None
+        self.logger.info('检查邮件配置数据表是否存在')
         if not EmailSettingConfig.table_exists():
+            self.logger.info('数据表不存在，开始初始化数据表')
             self.database.creat_table([EmailSettingConfig])
         else:
+            self.logger.info('存在数据表，开始邮件配置信息')
             config_list = list(EmailSettingConfig.select())
 
         _label = '请先选择验证模式'
@@ -134,7 +142,7 @@ class Email(ToolBoxPage):
         auth = ft.Row(controls=[ft.TextField(label=user_name_label, value=user_name_value),
                                 ft.TextField(label=password_label, value=password_value, password=True,
                                              can_reveal_password=True)], expand=True)
-
+        self.logger.info('完成配置界面UI初始化')
         return ft.Column(
             controls=[
                 drop_down,
@@ -148,8 +156,11 @@ class Email(ToolBoxPage):
         )
 
     def _email_sent_page(self) -> ft.Column:
+        self.logger.info('开始初始化邮件发送界面')
+        self.logger.info('开始查询邮件配置信息')
         config_list = list(EmailSettingConfig.select())
         if config_list:
+            self.logger.info('使用邮件配置信息初始化邮差')
             postman = Postman(_email_config=config_list[0], _logger=self.logger)
 
         to_text_field = ft.TextField(label='请输入收件人')
@@ -195,6 +206,7 @@ class Email(ToolBoxPage):
                                                                         subject_text_field.value,
                                                                         content_text_field.value,
                                                                         _get_attachments_list(files)))
+        self.logger.info('完成邮件发送界面UI初始化')
         return ft.Column(
             controls=[to_component, cc_component, subject_text_field, content_text_field,
                       ft.ElevatedButton(
@@ -209,17 +221,19 @@ class Email(ToolBoxPage):
 
     def _email_group_page(self) -> ft.Column:
         # setting dlg page
+        self.logger.info('开始初始化邮件分组界面')
         dlg = ft.AlertDialog(
             title=ft.Text(),
             content=ft.Container(),
             alignment=ft.alignment.center,
             title_padding=ft.padding.all(25),
-            on_dismiss= lambda _: _update_data_table(table)
+            on_dismiss=lambda _: _update_data_table(table)
         )
         self.page.add(dlg)
 
         def _update_data_table(_table: ft.DataTable):
             # load data from database
+            self.logger.info('开始更新邮件地址分组信息表')
             self.database.creat_table([EmailAddressInfo])
             address_list = list(EmailAddressInfo.select())
             table_row_list = []
@@ -233,8 +247,10 @@ class Email(ToolBoxPage):
                 table_row_list = None
             _table.rows = table_row_list
             self.page.update()
+            self.logger.info('完成邮件地址分组信息表更新')
 
         def _modify_email_address_info(_dlg, _dil_title: str = None):
+            self.logger.info('开始维护邮件分组信息')
             dlg.title.value = _dil_title
             tag_list = []
             tag_display = ft.Row(wrap=True)
@@ -274,6 +290,7 @@ class Email(ToolBoxPage):
                 e.control.update()
 
             def _modify_email_address():
+                self.logger.info('初始化邮件分组信息数据表')
                 self.database.creat_table([EmailAddressInfo])
                 info = EmailAddressInfo.get_or_none(EmailAddressInfo.email_address == address.value)
                 if info is None:
@@ -283,6 +300,7 @@ class Email(ToolBoxPage):
                 if address.value:
                     info.email_address = address.value
                 info.save()
+                self.logger.info('完成分组信息数据维护')
 
             # dlg ui
             # options query from database
@@ -337,6 +355,7 @@ class Email(ToolBoxPage):
             rows=None,
         )
         _update_data_table(table)
+        self.logger.info('完成初始化邮件分组界面UI')
         return ft.Column(controls=[email_address_bt, table], expand=True)
 
     def gui(self):
