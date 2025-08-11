@@ -227,7 +227,7 @@ class Email(ToolBoxPage):
             expand=True
         )
 
-    def _email_group_page(self) -> ft.Column:
+    def _email_group_page(self) -> ft.Container:
         # setting dlg page
         self.logger.info('开始初始化邮件分组界面')
         dlg = ft.AlertDialog(
@@ -364,7 +364,11 @@ class Email(ToolBoxPage):
         )
         _update_data_table(table)
         self.logger.info('完成初始化邮件分组界面UI')
-        return ft.Column(controls=[email_address_bt, table], expand=True)
+        return ft.Container(
+            content= ft.Column(controls=[email_address_bt, table],expand=True),
+            margin=ft.Margin(left=0,right=0,top=20,bottom=0)
+        )
+
 
     def gui(self):
         def on_tab_change(_e, _tabs):
