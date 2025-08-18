@@ -274,6 +274,26 @@ class Email(ToolBoxPage):
             self.page.update()
             self.logger.info('完成邮件地址分组信息表更新')
 
+        def _update_group_data_table(_table: ft.DataTable):
+            # load data from database
+            self.logger.info('开始更新邮件分组信息表')
+            self.database.creat_table([EmailGroup])
+            group_list = list(EmailGroup.select())
+            group_table_row_list = []
+            if group_list:
+                for group in group_list:
+                    group_table_row_list.append(ft.DataRow(
+                        [ft.DataCell(ft.Text(group.group_name))],
+                        on_select_changed=(lambda _group:
+                                           lambda e: _delete_group_info(_group.group_name)
+                                           )(group),
+                    ))
+            else:
+                group_table_row_list = None
+            _table.rows = group_table_row_list
+            self.page.update()
+            self.logger.info('完成邮件分组信息表更新')
+
         def _modify_email_address_info(_dlg, _dil_title: str = None, _old_addr: str = None, _old_tags: str = None):
             """
             Modifies the email address information in a dialog, allowing for the addition and removal of tags associated with an email address.
@@ -381,6 +401,10 @@ class Email(ToolBoxPage):
             if tag_list:
                 _update_tag_display()
 
+        def _delete_group_info(_group_name):
+            EmailGroup.delete().where(EmailGroup.group_name == _group_name).execute()
+            _update_group_data_table(group_table)
+
         def _modify_group_info(_dlg, _dil_title: str = None):
             # function area
             def _modify_info():
@@ -441,11 +465,33 @@ class Email(ToolBoxPage):
             ],
             rows=None,
         )
+        group_table = ft.DataTable(
+            width=700,
+            border=ft.border.all(2, ft.Colors.GREY_300),
+            border_radius=4,
+            vertical_lines=ft.border.BorderSide(1, ft.Colors.GREY_300),
+            horizontal_lines=ft.border.BorderSide(1, ft.Colors.GREY_300),
+            heading_row_height=100,
+            data_row_color={ft.ControlState.HOVERED: "0x30FF0000"},
+            divider_thickness=0,
+            column_spacing=200,
+            columns=[
+                ft.DataColumn(
+                    ft.Text("邮件分组"),
+                )
+            ],
+            rows=None,
+        )
         _update_data_table(table)
+        _update_group_data_table(group_table)
         self.logger.info('完成初始化邮件分组界面UI')
         return ft.Container(
             content=ft.Column(
-                controls=[ft.Row(controls=[email_address_bt, group_info_bt], spacing=15, expand=True), table],
+                controls=[ft.Row(controls=[email_address_bt, group_info_bt], spacing=15, expand=True),
+                          ft.Container(content=ft.Column(controls=[table], scroll=ft.ScrollMode.AUTO), height=200),
+                          ft.Container(content=ft.Column(controls=[group_table], scroll=ft.ScrollMode.AUTO),
+                                       height=200),
+                          ],
                 expand=True),
             margin=ft.Margin(left=0, right=0, top=20, bottom=0)
         )
