@@ -1,3 +1,4 @@
+import ast
 import re
 
 import flet as ft
@@ -229,6 +230,7 @@ class Email(ToolBoxPage):
 
     def _email_group_page(self) -> ft.Container:
         # function area
+        # Update Email Table
         def _update_data_table(_table: ft.DataTable):
             """
             Update the data table with email address information from the database.
@@ -258,8 +260,13 @@ class Email(ToolBoxPage):
             if address_list:
                 for addr in address_list:
                     table_row_list.append(ft.DataRow(
-                        [ft.DataCell(ft.Text(addr.email_address)), ft.DataCell(ft.Text(addr.email_tag))],
-                        on_select_changed=lambda e: print(f"row select changed: {e}"),
+                        [ft.DataCell(ft.Text(addr.email_address)),
+                         ft.DataCell(ft.Text(addr.email_tag))],
+                        on_select_changed=(lambda _addr:
+                                           lambda e: _modify_email_address_info(dlg, '维护邮件地址信息',
+                                                                                _old_addr=_addr.email_address,
+                                                                                _old_tags=_addr.email_tag)
+                                           )(addr),
                     ))
             else:
                 table_row_list = None
@@ -267,7 +274,7 @@ class Email(ToolBoxPage):
             self.page.update()
             self.logger.info('完成邮件地址分组信息表更新')
 
-        def _modify_email_address_info(_dlg, _dil_title: str = None):
+        def _modify_email_address_info(_dlg, _dil_title: str = None, _old_addr: str = None, _old_tags: str = None):
             """
             Modifies the email address information in a dialog, allowing for the addition and removal of tags associated with an email address.
 
@@ -289,8 +296,12 @@ class Email(ToolBoxPage):
             self.logger.info('开始维护邮件分组信息')
             _dlg.title.value = _dil_title
             tag_list = []
+            if _old_tags:
+                tag_list = ast.literal_eval(_old_tags)
             tag_display = ft.Row(wrap=True)
             address = ft.TextField(label='请输入邮件地址')
+            if _old_addr:
+                address.value = _old_addr
 
             def _update_tag_display():
                 tag_display.controls.clear()
@@ -311,7 +322,8 @@ class Email(ToolBoxPage):
                         margin=ft.margin.only(right=4, bottom=4)
                     )
                     tag_display.controls.append(chip)
-                tag_display.update()
+                if hasattr(self, 'page') and self.page and _dlg.open:
+                    tag_display.update()
 
             def _remove_item(item):
                 if item in tag_list:
@@ -366,13 +378,33 @@ class Email(ToolBoxPage):
             _dlg.content.content = content
             _dlg.open = True
             self.page.update()
+            if tag_list:
+                _update_tag_display()
 
         def _modify_group_info(_dlg, _dil_title: str = None):
             # function area
+            def _modify_info():
+                self.logger.info('开始检查是否有重名分组')
+                value = EmailGroup.get_or_none(EmailGroup.group_name == group_name.value)
+                if value is None:
+                    self.logger.info('不存在重复分组信息，开始写入分组信息')
+                    EmailGroup.create(group_name=group_name.value).save()
+                    self.logger.info(f'完成分组写入{group_name.value}')
+                else:
+                    self.logger.warning('已存在分组信息')
 
             # ui code
+            group_name = ft.TextField(label='请输入分组名称')
+            group_modify_bt = ft.ElevatedButton('维护分组', on_click=lambda _: _modify_info())
+
+            content = ft.Container(content=
+                                   ft.Column(controls=[group_name, group_modify_bt])
+                                   )
+            # update _dlg ui
+            _dlg.content.content = content
             _dlg.title = _dil_title
-            # group info ui
+            _dlg.open = True
+            self.page.update()
 
         #  dlg page
         self.logger.info('开始初始化邮件分组界面')
@@ -386,7 +418,8 @@ class Email(ToolBoxPage):
         self.page.add(dlg)
 
         # page ui code
-        email_address_bt = ft.ElevatedButton('维护邮件地址',on_click=lambda _: _modify_email_address_info(dlg, '邮件地址维护'))
+        email_address_bt = ft.ElevatedButton('维护邮件地址',
+                                             on_click=lambda _: _modify_email_address_info(dlg, '邮件地址维护'))
         group_info_bt = ft.ElevatedButton('维护分组信息', on_click=lambda _: _modify_group_info(dlg, '分组信息维护'))
         table = ft.DataTable(
             width=700,
@@ -411,10 +444,11 @@ class Email(ToolBoxPage):
         _update_data_table(table)
         self.logger.info('完成初始化邮件分组界面UI')
         return ft.Container(
-            content= ft.Column(controls=[ft.Row(controls=[email_address_bt, group_info_bt], spacing=15,expand=True),table],expand=True),
-            margin=ft.Margin(left=0,right=0,top=20,bottom=0)
+            content=ft.Column(
+                controls=[ft.Row(controls=[email_address_bt, group_info_bt], spacing=15, expand=True), table],
+                expand=True),
+            margin=ft.Margin(left=0, right=0, top=20, bottom=0)
         )
-
 
     def gui(self):
         def on_tab_change(_e, _tabs):
