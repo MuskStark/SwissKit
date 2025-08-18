@@ -263,7 +263,7 @@ class Email(ToolBoxPage):
                         [ft.DataCell(ft.Text(addr.email_address)),
                          ft.DataCell(ft.Text(addr.email_tag))],
                         on_select_changed=(lambda _addr:
-                                           lambda e: _modify_email_address_info(dlg, '维护邮件地址信息',
+                                           lambda e: _modify_email_address_info(_get_dlg(), '维护邮件地址信息',
                                                                                 _old_addr=_addr.email_address,
                                                                                 _old_tags=_addr.email_tag)
                                            )(addr),
@@ -432,19 +432,24 @@ class Email(ToolBoxPage):
 
         #  dlg page
         self.logger.info('开始初始化邮件分组界面')
-        dlg = ft.AlertDialog(
-            title=ft.Text(),
-            content=ft.Container(),
-            alignment=ft.alignment.center,
-            title_padding=ft.padding.all(25),
-            on_dismiss=lambda _: _update_data_table(table)
-        )
-        self.page.add(dlg)
 
-        # page ui code
+        def _get_dlg():
+            dlg = ft.AlertDialog(
+                title=ft.Text(),
+                content=ft.Container(),
+                alignment=ft.alignment.center,
+                title_padding=ft.padding.all(25),
+                on_dismiss=lambda _: _update_data_table(table)
+            )
+            self.page.add(dlg)
+            return dlg \
+ \
+                # page ui code
+
         email_address_bt = ft.ElevatedButton('维护邮件地址',
-                                             on_click=lambda _: _modify_email_address_info(dlg, '邮件地址维护'))
-        group_info_bt = ft.ElevatedButton('维护分组信息', on_click=lambda _: _modify_group_info(dlg, '分组信息维护'))
+                                             on_click=lambda _: _modify_email_address_info(_get_dlg(), '邮件地址维护'))
+        group_info_bt = ft.ElevatedButton('维护分组信息',
+                                          on_click=lambda _: _modify_group_info(_get_dlg(), '分组信息维护'))
         table = ft.DataTable(
             width=700,
             border=ft.border.all(2, ft.Colors.GREY_300),
