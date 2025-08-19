@@ -1,0 +1,78 @@
+import flet as ft
+
+from ....database.pojo.email.email_settings_config import EmailSettingConfig
+from ....util.postman import Postman
+
+
+class EmailEditor:
+    def __init__(self, page, logger, database_pojo):
+        self.page = page
+        self.logger = logger
+        self.database = database_pojo
+
+    def email_sent_page(self) -> ft.Container:
+        self.logger.info('开始初始化邮件发送界面')
+        self.logger.info('开始查询邮件配置信息')
+
+        to_text_field = ft.TextField(label='请输入收件人')
+        to_component = ft.Row(controls=[ft.Text('收件人'), to_text_field], expand=True)
+        cc_text_field = ft.TextField(label='请输入抄送人')
+        cc_component = ft.Row(controls=[ft.Text('抄送'), cc_text_field], expand=True)
+        subject_text_field = ft.TextField(label="邮件标题", multiline=False)
+        content_text_field = ft.TextField(label="邮件正文", multiline=True)
+
+        files = ft.Ref[ft.Column]()
+
+        def _file_picker_result(e: ft.FilePickerResultEvent):
+            files.current.controls.clear()
+            if e.files is not None:
+                for f in e.files:
+                    files.current.controls.append(ft.Row([ft.Text(f.path)]))
+            self.page.update()
+
+        file_picker = ft.FilePicker(on_result=_file_picker_result)
+        self.page.overlay.append(file_picker)
+
+        def _get_addr_list(_cc_text_file: ft.TextField):
+            cc = _cc_text_file.value
+            if not cc:
+                return []
+
+            if ';' in cc:
+                return [item.strip() for item in cc.split(';') if item.strip()]
+            else:
+                return [cc.strip()] if cc.strip() else []
+
+        def _get_attachments_list(_files: ft.Ref[ft.Column]):
+            column_widget = _files.current
+            files_path_list = []
+            for control in column_widget.controls:
+                if isinstance(control, ft.Text):
+                    files_path_list.append(control.value)
+            return files_path_list
+
+        def _sent_email():
+            if EmailSettingConfig.table_exists():
+                config_list = list(EmailSettingConfig.select())
+                if config_list:
+                    self.logger.info('使用邮件配置信息初始化邮差')
+                    postman = Postman(_email_config=config_list[0], _logger=self.logger)
+                    postman.sent(_get_addr_list(to_text_field), _get_addr_list(cc_text_field), subject_text_field.value,
+                                 content_text_field.value, _get_attachments_list(files))
+                else:
+                    self.logger.warning('无配置文件，无法初始化邮差')
+            else:
+                self.logger.error('无数据表，无法初始化邮差')
+
+        sent_button = ft.ElevatedButton(text='发送', on_click=lambda _: _sent_email())
+        self.logger.info('完成邮件发送界面UI初始化')
+        return ft.Container(content=ft.Column(controls=[to_component, cc_component, subject_text_field,
+                                                        ft.Container(content=ft.Column(controls=[content_text_field],
+                                                                                       scroll=ft.ScrollMode.AUTO,
+                                                                                       expand=True),
+                                                                     height=300),
+                                                        ft.ElevatedButton("选择附件", icon=ft.Icons.ATTACH_FILE,
+                                                                          on_click=lambda _: file_picker.pick_files(
+                                                                              allow_multiple=True), ),
+                                                        ft.Column(ref=files), sent_button],
+                                              expand=True))
