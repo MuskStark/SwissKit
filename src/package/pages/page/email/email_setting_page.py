@@ -11,7 +11,7 @@ class EmailSetting:
         self.logger = logger
         self.database = database_pojo
 
-    def setting_page(self) -> ft.Column:
+    def setting_page(self) -> ft.Container:
         self.logger.info('开始初始化邮件配置界面')
 
         def on_dropdown_change(e, _server: ft.Row):
@@ -25,12 +25,8 @@ class EmailSetting:
 
         def _save_settings(_drop_down: ft.Dropdown, _server: ft.Row, _auth: ft.Row):
             self.logger.info('开始邮件配置')
-            dlg = ft.AlertDialog(
-                title=ft.Text("通知"),
-                content=ft.Text(""),
-                alignment=ft.alignment.center,
-                title_padding=ft.padding.all(25),
-            )
+            dlg = ft.AlertDialog(title=ft.Text("通知"), content=ft.Text(""), alignment=ft.alignment.center,
+                                 title_padding=ft.padding.all(25), )
             self.page.add(dlg)
             try:
                 self.logger.info('开始修改邮件设置')
@@ -44,14 +40,13 @@ class EmailSetting:
 
                 # valid config
                 self.logger.info('开始验证配置合法性')
-                url_pattern = re.compile(
-                    r'^(https?://)?'  # http 或 https 协议
-                    r'(?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+'  # 域名
-                    r'(?:[A-Z]{2,6}\.?|[A-Z0-9-]{2,}\.?)|'  # 顶级域名
-                    r'localhost|'  # 本地主机
-                    r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})'  # IP 地址
-                    r'(?::\d+)?'  # 端口号
-                    r'(?:/?|[/?]\S+)$', re.IGNORECASE)  # 路径和查询参数
+                url_pattern = re.compile(r'^(https?://)?'  # http 或 https 协议
+                                         r'(?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+'  # 域名
+                                         r'(?:[A-Z]{2,6}\.?|[A-Z0-9-]{2,}\.?)|'  # 顶级域名
+                                         r'localhost|'  # 本地主机
+                                         r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})'  # IP 地址
+                                         r'(?::\d+)?'  # 端口号
+                                         r'(?:/?|[/?]\S+)$', re.IGNORECASE)  # 路径和查询参数
                 is_url = re.match(url_pattern, server_url)
                 is_port = 65535 >= 0 <= int(server_port)
 
@@ -66,12 +61,9 @@ class EmailSetting:
                         config.user_name = user_name
                         config.password = password
                     else:
-                        config = EmailSettingConfig(server_type=server_type,
-                                                    sent_server_url=server_url,
-                                                    sent_server_port=server_port,
-                                                    sent_active_ssl=ssl,
-                                                    user_name=user_name,
-                                                    password=password)
+                        config = EmailSettingConfig(server_type=server_type, sent_server_url=server_url,
+                                                    sent_server_port=server_port, sent_active_ssl=ssl,
+                                                    user_name=user_name, password=password)
                     config.save()
                     self.logger.info('配置保存成功')
                     self.page.dialog = dlg
@@ -108,15 +100,9 @@ class EmailSetting:
         user_name_value = None
         password_value = None
 
-        drop_down = ft.Dropdown(
-            label='选择验证模式',
-            options=[
-                ft.dropdown.Option("smtp"),
-                # ft.dropdown.Option("pop3"),
-            ],
-            on_change=lambda e: on_dropdown_change(e, server),
-            width=200
-        )
+        drop_down = ft.Dropdown(label='选择验证模式',
+                                options=[ft.dropdown.Option("smtp"),  # ft.dropdown.Option("pop3"),
+                                         ], on_change=lambda e: on_dropdown_change(e, server), width=200)
         # GET CONFIG FROM DATABASE
         if config_list:
             _label = '已生效配置'
@@ -133,14 +119,6 @@ class EmailSetting:
                                 ft.TextField(label=password_label, value=password_value, password=True,
                                              can_reveal_password=True)], expand=True)
         self.logger.info('完成配置界面UI初始化')
-        return ft.Column(
-            controls=[
-                drop_down,
-                server,
-                auth,
-                ft.Row(controls=[
-                    ft.ElevatedButton(text='保存配置', on_click=lambda _: _save_settings(drop_down, server, auth))],
-                    alignment=ft.MainAxisAlignment.CENTER,
-                    expand=True)
-            ]
-        )
+        return ft.Container(content=ft.Column(controls=[drop_down, server, auth, ft.Row(
+            controls=[ft.ElevatedButton(text='保存配置', on_click=lambda _: _save_settings(drop_down, server, auth))],
+            alignment=ft.MainAxisAlignment.CENTER, expand=True)]), margin=ft.Margin(left=0, right=0, top=10, bottom=0))

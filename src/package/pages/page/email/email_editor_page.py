@@ -19,7 +19,7 @@ class EmailEditor:
         cc_text_field = ft.TextField(label='请输入抄送人')
         cc_component = ft.Row(controls=[ft.Text('抄送'), cc_text_field], expand=True)
         subject_text_field = ft.TextField(label="邮件标题", multiline=False)
-        content_text_field = ft.TextField(label="邮件正文", multiline=True)
+        content_text_field = ft.TextField(label="邮件正文", multiline=True, height=200, expand=True)
 
         files = ft.Ref[ft.Column]()
 
@@ -70,9 +70,14 @@ class EmailEditor:
                                                         ft.Container(content=ft.Column(controls=[content_text_field],
                                                                                        scroll=ft.ScrollMode.AUTO,
                                                                                        expand=True),
-                                                                     height=300),
+                                                                     height=200),
                                                         ft.ElevatedButton("选择附件", icon=ft.Icons.ATTACH_FILE,
                                                                           on_click=lambda _: file_picker.pick_files(
                                                                               allow_multiple=True), ),
-                                                        ft.Column(ref=files), sent_button],
-                                              expand=True))
+                                                        ft.Column(ref=files),
+                                                        ft.Row(controls=[sent_button],
+                                                               alignment=ft.MainAxisAlignment.CENTER,
+                                                               expand=True), ],
+                                              expand=True),
+                            margin=ft.Margin(left=0, right=0, top=10, bottom=0)
+                            )
