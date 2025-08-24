@@ -200,6 +200,9 @@ class EmailInfo:
                     self.logger.info(f'完成分组写入{group_name.value}')
                 else:
                     self.logger.warning('已存在分组信息')
+                _dlg.open = False
+                _update_group_data_table(group_table)
+                self.page.update()
 
             # ui code
             group_name = ft.TextField(label='请输入分组名称')
@@ -226,8 +229,7 @@ class EmailInfo:
                 on_dismiss=lambda _: _update_data_table(table)
             )
             self.page.add(dlg)
-            return dlg \
- \
+            return dlg
                 # page ui code
 
         email_address_bt = ft.ElevatedButton('维护邮件地址',
