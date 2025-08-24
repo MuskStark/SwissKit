@@ -1,5 +1,6 @@
 import flet as ft
 
+from ....components.multi_select_component import MultiSelectComponent
 from ....database.pojo.email.email_settings_config import EmailSettingConfig
 from ....util.postman import Postman
 
@@ -66,6 +67,9 @@ class EmailEditor:
 
         sent_button = ft.ElevatedButton(text='发送', on_click=lambda _: _sent_email())
         self.logger.info('完成邮件发送界面UI初始化')
+        a = MultiSelectComponent(
+            options=['1', '2', '3']
+        )
         return ft.Container(content=ft.Column(controls=[to_component, cc_component, subject_text_field,
                                                         ft.Container(content=ft.Column(controls=[content_text_field],
                                                                                        scroll=ft.ScrollMode.AUTO,
@@ -77,7 +81,7 @@ class EmailEditor:
                                                         ft.Column(ref=files),
                                                         ft.Row(controls=[sent_button],
                                                                alignment=ft.MainAxisAlignment.CENTER,
-                                                               expand=True), ],
+                                                               expand=True), a],
                                               expand=True),
                             margin=ft.Margin(left=0, right=0, top=10, bottom=0)
                             )
