@@ -1,19 +1,22 @@
 import flet as ft
 
+from ..enums.layout_enums import Layout
 
-class MultiSelectComponent(ft.Row):
+
+class MultiSelectComponent(ft.Container):
     """
     多选组件 - 继承自 ft.Row 实现复合控件
     支持单个选项选择/取消、全选、清除所有选项
     """
 
-    def __init__(self, dropdown_label: str = None, options: list[str] = None, title="多选组件", on_change=None):
+    def __init__(self, dropdown_label: str = None, options: list[str] = None, title="多选组件", on_change=None, layout=Layout.Horizontal):
         super().__init__()
         self.dropdown_label = dropdown_label or "选择选项"
         self.options_list = options or []
         self.control_name = title
         self.on_change = on_change
         self.tag_list = []
+        self.layout = layout
 
         # 创建组件
         self.dropdown = ft.Dropdown(
@@ -25,11 +28,11 @@ class MultiSelectComponent(ft.Row):
 
         self.tag_display = ft.Row(wrap=True)
 
-        # 设置控件布局
-        self.controls = [
-            self.dropdown,
-            self.tag_display
-        ]
+        if self.layout == Layout.Horizontal:
+            self.content = ft.Row(controls=[self.dropdown, self.tag_display], expand=True)
+        if self.layout == Layout.Vertical:
+            self.content = ft.Column(controls=[self.dropdown, self.tag_display], expand=True)
+
         self.expand = True
 
     def did_mount(self):
