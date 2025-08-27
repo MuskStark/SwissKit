@@ -1,7 +1,9 @@
 import flet as ft
 
 from ....components.multi_select_component import MultiSelectComponent
+from ....database.pojo.email.email_group import EmailGroup
 from ....database.pojo.email.email_settings_config import EmailSettingConfig
+from ....enums.layout_enums import Layout
 from ....util.postman import Postman
 
 
@@ -11,13 +13,22 @@ class EmailEditor:
         self.logger = logger
         self.database = database_pojo
 
+        # init dropdownOptions
+        self.logger.info('开始加载分组信息')
+        self.group_name_option = list(EmailGroup.select())
+        if self.group_name_option is None:
+            self.group_name_option = []
+        else:
+            self.group_name_option = [value.group_name for value in self.group_name_option]
+        self.logger.info(f'完成分组信息加载:{self.group_name_option}')
+
     def email_sent_page(self) -> ft.Container:
         self.logger.info('开始初始化邮件发送界面')
         self.logger.info('开始查询邮件配置信息')
 
-        to_text_field = ft.TextField(label='请输入收件人')
+        to_text_field = MultiSelectComponent(dropdown_label='请选择收件人分组',options=self.group_name_option,layout=Layout.Horizontal)
         to_component = ft.Row(controls=[ft.Text('收件人'), to_text_field], expand=True)
-        cc_text_field = ft.TextField(label='请输入抄送人')
+        cc_text_field = MultiSelectComponent(dropdown_label='请选择抄送分组',options=self.group_name_option,layout=Layout.Horizontal)
         cc_component = ft.Row(controls=[ft.Text('抄送'), cc_text_field], expand=True)
         subject_text_field = ft.TextField(label="邮件标题", multiline=False)
         content_text_field = ft.TextField(label="邮件正文", multiline=True, height=200, expand=True)
@@ -67,9 +78,6 @@ class EmailEditor:
 
         sent_button = ft.ElevatedButton(text='发送', on_click=lambda _: _sent_email())
         self.logger.info('完成邮件发送界面UI初始化')
-        a = MultiSelectComponent(
-            options=['1', '2', '3']
-        )
         return ft.Container(content=ft.Column(controls=[to_component, cc_component, subject_text_field,
                                                         ft.Container(content=ft.Column(controls=[content_text_field],
                                                                                        scroll=ft.ScrollMode.AUTO,
@@ -81,7 +89,7 @@ class EmailEditor:
                                                         ft.Column(ref=files),
                                                         ft.Row(controls=[sent_button],
                                                                alignment=ft.MainAxisAlignment.CENTER,
-                                                               expand=True), a],
+                                                               expand=True)],
                                               expand=True),
                             margin=ft.Margin(left=0, right=0, top=10, bottom=0)
                             )
