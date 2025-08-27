@@ -43,7 +43,7 @@ class MultiSelectComponent(ft.Container):
         """控件卸载前的回调"""
         pass
 
-    @property
+
     def is_isolated(self):
         return True
 
