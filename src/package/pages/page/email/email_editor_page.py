@@ -1,6 +1,8 @@
 import flet as ft
 
+from ....components.file_or_path_picker import FileOrPathPicker
 from ....components.multi_select_component import MultiSelectComponent
+from ....database.pojo.email.email_address import EmailAddressInfo
 from ....database.pojo.email.email_group import EmailGroup
 from ....database.pojo.email.email_settings_config import EmailSettingConfig
 from ....enums.layout_enums import Layout
@@ -34,6 +36,19 @@ class EmailEditor:
         content_text_field = ft.TextField(label="邮件正文", multiline=True, height=200, expand=True)
 
         files = ft.Ref[ft.Column]()
+
+        path_picker = FileOrPathPicker(self.page,ft.Icons.UPLOAD,False,'选择附件文件所在文件夹')
+        split_separator = ft.TextField(label='请输入标签分隔符')
+        check_box=ft.Checkbox(label='是否开启根据附件文件名中的标签进行批量发送', on_change= lambda _: _on_checkbox_change())
+
+        batch_file_folder = ft.Container(content=ft.Column(controls=[path_picker, split_separator],expand=True),disabled=False, expand=True)
+
+        def _on_checkbox_change():
+            if check_box.value:
+                batch_file_folder.disabled = True
+            else:
+                batch_file_folder.disabled = False
+            batch_file_folder.update()
 
         def _file_picker_result(e: ft.FilePickerResultEvent):
             files.current.controls.clear()
@@ -69,7 +84,16 @@ class EmailEditor:
                 if config_list:
                     self.logger.info('使用邮件配置信息初始化邮差')
                     postman = Postman(_email_config=config_list[0], _logger=self.logger)
-                    postman.sent(_get_addr_list(to_text_field), _get_addr_list(cc_text_field), subject_text_field.value,
+                    to_tag_list = to_text_field.get_selected_values()
+                    cc_tag_list = cc_text_field.get_selected_values()
+                    to_list = []
+                    cc_list = []
+                    for to_tag in to_tag_list:
+                        to_list.extend([addr.email_address for addr in list(EmailAddressInfo.select().where(EmailAddressInfo.email_tag.contains(to_tag)))])
+                    for cc_tag in cc_tag_list:
+                        cc_list.extend([addr.email_address for addr in list(EmailAddressInfo.select().where(EmailAddressInfo.email_tag.contains(cc_tag)))])
+
+                    postman.sent(to_list, cc_list, subject_text_field.value,
                                  content_text_field.value, _get_attachments_list(files))
                 else:
                     self.logger.warning('无配置文件，无法初始化邮差')
@@ -87,9 +111,11 @@ class EmailEditor:
                                                                           on_click=lambda _: file_picker.pick_files(
                                                                               allow_multiple=True), ),
                                                         ft.Column(ref=files),
+                                                        check_box,
+                                                        batch_file_folder,
                                                         ft.Row(controls=[sent_button],
                                                                alignment=ft.MainAxisAlignment.CENTER,
-                                                               expand=True)],
+                                                               expand=True),],
                                               expand=True),
                             margin=ft.Margin(left=0, right=0, top=10, bottom=0)
                             )
