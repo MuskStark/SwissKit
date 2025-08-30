@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import flet as ft
 
 from ....components.file_or_path_picker import FileOrPathPicker
@@ -28,20 +30,24 @@ class EmailEditor:
         self.logger.info('开始初始化邮件发送界面')
         self.logger.info('开始查询邮件配置信息')
 
-        to_text_field = MultiSelectComponent(dropdown_label='请选择收件人分组',options=self.group_name_option,layout=Layout.Horizontal)
+        to_text_field = MultiSelectComponent(dropdown_label='请选择收件人分组', options=self.group_name_option,
+                                             layout=Layout.Horizontal)
         to_component = ft.Row(controls=[ft.Text('收件人'), to_text_field], expand=True)
-        cc_text_field = MultiSelectComponent(dropdown_label='请选择抄送分组',options=self.group_name_option,layout=Layout.Horizontal)
+        cc_text_field = MultiSelectComponent(dropdown_label='请选择抄送分组', options=self.group_name_option,
+                                             layout=Layout.Horizontal)
         cc_component = ft.Row(controls=[ft.Text('抄送'), cc_text_field], expand=True)
         subject_text_field = ft.TextField(label="邮件标题", multiline=False)
         content_text_field = ft.TextField(label="邮件正文", multiline=True, height=200, expand=True)
 
         files = ft.Ref[ft.Column]()
 
-        path_picker = FileOrPathPicker(self.page,ft.Icons.UPLOAD,False,'选择附件文件所在文件夹')
+        path_picker = FileOrPathPicker(self.page, ft.Icons.UPLOAD, False, '选择附件文件所在文件夹')
         split_separator = ft.TextField(label='请输入标签分隔符')
-        check_box=ft.Checkbox(label='是否开启根据附件文件名中的标签进行批量发送', on_change= lambda _: _on_checkbox_change())
+        check_box = ft.Checkbox(label='是否开启根据附件文件名中的标签进行批量发送',
+                                on_change=lambda _: _on_checkbox_change())
 
-        batch_file_folder = ft.Container(content=ft.Column(controls=[path_picker, split_separator],expand=True),disabled=False, expand=True)
+        batch_file_folder = ft.Container(content=ft.Column(controls=[path_picker, split_separator], expand=True),
+                                         disabled=False, expand=True)
 
         def _on_checkbox_change():
             if check_box.value:
@@ -88,10 +94,32 @@ class EmailEditor:
                     cc_tag_list = cc_text_field.get_selected_values()
                     to_list = []
                     cc_list = []
-                    for to_tag in to_tag_list:
-                        to_list.extend([addr.email_address for addr in list(EmailAddressInfo.select().where(EmailAddressInfo.email_tag.contains(to_tag)))])
-                    for cc_tag in cc_tag_list:
-                        cc_list.extend([addr.email_address for addr in list(EmailAddressInfo.select().where(EmailAddressInfo.email_tag.contains(cc_tag)))])
+                    if check_box.value:
+                        attachment_dic = {}
+                        attachment_path = Path(path_picker.get_pick_value())
+                        if attachment_path.exists() and attachment_path.is_dir():
+                            all_file = [file.name for file in attachment_path.iterdir() if file.is_file()]
+                            for file in all_file:
+                                if split_separator.value in Path(file).stem:
+                                    file_name = Path(file).stem
+                                    tag_from_file = split_separator.value.join(
+                                        file_name.split(split_separator.value)[1:])
+                                    if tag_from_file in attachment_dic.keys():
+                                        attachment_dic.get(tag_from_file).append(str(Path(attachment_path, file)))
+                                    else:
+                                        attachment_dic[tag_from_file] = [str(Path(attachment_path, file))]
+                        if attachment_dic:
+                            for tag, file_list in attachment_dic.items():
+                                email_pojo_list = [addr for addr in list(
+                                    EmailAddressInfo.select().where(EmailAddressInfo.email_tag.contains(tag)))]
+
+                    else:
+                        for to_tag in to_tag_list:
+                            to_list.extend([addr.email_address for addr in list(
+                                EmailAddressInfo.select().where(EmailAddressInfo.email_tag.contains(to_tag)))])
+                        for cc_tag in cc_tag_list:
+                            cc_list.extend([addr.email_address for addr in list(
+                                EmailAddressInfo.select().where(EmailAddressInfo.email_tag.contains(cc_tag)))])
 
                     postman.sent(to_list, cc_list, subject_text_field.value,
                                  content_text_field.value, _get_attachments_list(files))
@@ -115,7 +143,7 @@ class EmailEditor:
                                                         batch_file_folder,
                                                         ft.Row(controls=[sent_button],
                                                                alignment=ft.MainAxisAlignment.CENTER,
-                                                               expand=True),],
+                                                               expand=True), ],
                                               expand=True),
                             margin=ft.Margin(left=0, right=0, top=10, bottom=0)
                             )
