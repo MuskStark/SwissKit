@@ -89,7 +89,25 @@ flet build windows -v
 
 在该模式下，通过填写配置拆分规则，工具将根据配置情况对Excel进行拆分
 
+### 二、Email效率工具
+
+#### 1.Email群发
+
+文档建设中
+
+#### 2.Email地址及分组维护
+
+##### 2.1 新增分组信息
+
+文档建设中
+
 ## 更新日志
+
+### [0.3.0](https://github.com/MuskStark/SwissKit/tree/v0.3.0)
+
+新增
+
+- 新增基于标签分组的邮件群发工具
 
 ### [0.2.2.2](https://github.com/MuskStark/SwissKit/tree/v0.2.2.2)
 

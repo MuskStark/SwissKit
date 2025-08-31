@@ -32,35 +32,19 @@ class PageConfig:
         "odap_formater": {
             "module": "page.odap_formater",
             "class": "ODAPFormater",
-            "label": "智数平台工具",
+            "label": "工具",
             "icon": "LOCAL_GAS_STATION_OUTLINED",
             "selected_icon": "LOCAL_GAS_STATION",
             "order": 1
         },
-        "guan_hu_match": {
-            "module": "page.guan_hu_match",
-            "class": "Relationship",
-            "label": "管户数据处理",
-            "icon": "ACCOUNT_BOX_OUTLINED",
-            "selected_icon": "ACCOUNT_BOX",
-            "order": 0
-        },
+
         "odap_search_value": {
             "module": "page.odap_search_value",
             "class": "ODAPSearchValue",
-            "label": "智数待查询值生成",
+            "label": "待查询值生成",
             "icon": "QUERY_STATS_OUTLINED",
             "selected_icon": "QUERY_STATS",
             "order": 3
-        },
-        "innovation": {
-            "module": "page.innovation",
-            "class": "Innovation",
-            "label": "创新委评分汇总工具",
-            "icon": "DESKTOP_WINDOWS_OUTLINED",
-            "selected_icon": "DESKTOP_WINDOWS",
-            "order": 4,
-            "visible_condition": lambda ctx: ctx.get('special_modl', False)
         }
     }
 

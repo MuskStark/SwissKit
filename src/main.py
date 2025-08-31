@@ -39,6 +39,7 @@ async def main(page: ft.Page):
     # 清除加载提示
     page.clean()
 
+
     # 添加主界面
     page.add(
         ft.Row(
