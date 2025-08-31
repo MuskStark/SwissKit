@@ -1,3 +1,4 @@
+import ast
 from pathlib import Path
 
 import flet as ft
@@ -47,13 +48,13 @@ class EmailEditor:
                                 on_change=lambda _: _on_checkbox_change())
 
         batch_file_folder = ft.Container(content=ft.Column(controls=[path_picker, split_separator], expand=True),
-                                         disabled=False, expand=True)
+                                         disabled=True, expand=True)
 
         def _on_checkbox_change():
             if check_box.value:
-                batch_file_folder.disabled = True
-            else:
                 batch_file_folder.disabled = False
+            else:
+                batch_file_folder.disabled = True
             batch_file_folder.update()
 
         def _file_picker_result(e: ft.FilePickerResultEvent):
@@ -102,16 +103,30 @@ class EmailEditor:
                             for file in all_file:
                                 if split_separator.value in Path(file).stem:
                                     file_name = Path(file).stem
-                                    tag_from_file = split_separator.value.join(
-                                        file_name.split(split_separator.value)[1:])
+                                    tag_from_file = file_name.rsplit(split_separator.value, 1)[-1]
                                     if tag_from_file in attachment_dic.keys():
-                                        attachment_dic.get(tag_from_file).append(str(Path(attachment_path, file)))
+                                        attachment_dic[tag_from_file].append(str(Path(attachment_path, file)))
                                     else:
                                         attachment_dic[tag_from_file] = [str(Path(attachment_path, file))]
                         if attachment_dic:
                             for tag, file_list in attachment_dic.items():
-                                email_pojo_list = [addr for addr in list(
-                                    EmailAddressInfo.select().where(EmailAddressInfo.email_tag.contains(tag)))]
+                                att_to_list = []
+                                att_cc_list = []
+                                email_pojo_list = [addr for addr in list(EmailAddressInfo.select().where(EmailAddressInfo.email_tag.contains(tag)))]
+                                if to_tag_list or cc_tag_list:
+                                    for email_pojo in email_pojo_list:
+                                        if to_tag_list:
+                                            for _to in to_tag_list:
+                                                if _to in ast.literal_eval(email_pojo.email_tag):
+                                                    att_to_list.append(email_pojo.email_address)
+                                        if cc_tag_list:
+                                            for _cc in cc_tag_list:
+                                                if _cc in ast.literal_eval(email_pojo.email_tag):
+                                                    att_cc_list.append(email_pojo.email_address)
+                                if len(att_to_list) == 0:
+                                    att_to_list = [pojo.email_address for pojo in email_pojo_list]
+                                postman.sent(att_to_list, att_cc_list, subject_text_field.value,
+                                             content_text_field.value, file_list)
 
                     else:
                         for to_tag in to_tag_list:
@@ -121,8 +136,8 @@ class EmailEditor:
                             cc_list.extend([addr.email_address for addr in list(
                                 EmailAddressInfo.select().where(EmailAddressInfo.email_tag.contains(cc_tag)))])
 
-                    postman.sent(to_list, cc_list, subject_text_field.value,
-                                 content_text_field.value, _get_attachments_list(files))
+                        postman.sent(to_list, cc_list, subject_text_field.value,
+                                     content_text_field.value, _get_attachments_list(files))
                 else:
                     self.logger.warning('无配置文件，无法初始化邮差')
             else:
