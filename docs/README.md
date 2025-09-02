@@ -113,6 +113,12 @@ flet build windows -v
 ![](./images/email/flow.png)
 ## 更新日志
 
+### [0.3.0.1](https://github.com/MuskStark/SwissKit/tree/v0.3.0.1)
+
+BugFix
+
+- 修复因数据库异常导致邮件工具无法打开的Bug
+
 ### [0.3.0](https://github.com/MuskStark/SwissKit/tree/v0.3.0)
 
 新增
