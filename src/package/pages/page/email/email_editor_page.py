@@ -2,9 +2,11 @@ import ast
 from pathlib import Path
 
 import flet as ft
+from peewee import OperationalError
 
 from ....components.file_or_path_picker import FileOrPathPicker
 from ....components.multi_select_component import MultiSelectComponent
+from ....database.database_obj import DataBaseObj
 from ....database.pojo.email.email_address import EmailAddressInfo
 from ....database.pojo.email.email_group import EmailGroup
 from ....database.pojo.email.email_settings_config import EmailSettingConfig
@@ -13,14 +15,20 @@ from ....util.postman import Postman
 
 
 class EmailEditor:
-    def __init__(self, page, logger, database_pojo):
+    def __init__(self, page, logger, database_pojo:DataBaseObj):
         self.page = page
         self.logger = logger
         self.database = database_pojo
 
         # init dropdownOptions
         self.logger.info('开始加载分组信息')
-        self.group_name_option = list(EmailGroup.select())
+        try:
+            self.group_name_option = list(EmailGroup.select())
+        except OperationalError as  e:
+            self.logger.info('缺少所需数据表，开始创建')
+            self.database.creat_table([EmailGroup])
+            self.logger.info('完成数据表创建')
+            self.group_name_option = None
         if self.group_name_option is None:
             self.group_name_option = []
         else:
