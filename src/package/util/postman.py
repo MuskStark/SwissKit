@@ -6,53 +6,134 @@ from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
+from typing import List, Optional, Union
 
 from .log_util import get_logger
 
 
 class Postman:
+
     def __init__(self, _email_config, _logger=get_logger(name='email')):
+
         self.logger = _logger
         self.email_config = _email_config
-        # if _email_config is None, stop init PostMan
-        self.sent_server = None
-        # init status
+        self.sent_server: Optional[Union[smtplib.SMTP, smtplib.SMTP_SSL]] = None
         self.complete_init = False
         self.is_connected = False
+
+        if not self.email_config:
+            self.logger.warning("无邮件配置，跳过邮差初始化")
+            return
+
+
+        self._initialize_smtp_server()
+
+    def _initialize_smtp_server(self):
+
         try:
-            if self.email_config:
-                self.logger.info("开始初始化邮差")
-                if self.email_config.server_type == 'smtp':
-                    if self.email_config.sent_active_ssl:
-                        self.sent_server = smtplib.SMTP(
-                            self.email_config.sent_server_url,
-                            self.email_config.sent_server_port,
-                            timeout=30
-                        )
-                        # send ehlo
-                        self.sent_server.ehlo()
-                        # enable TLS
-                        context = ssl.create_default_context()
-                        context.check_hostname = False
-                        context.verify_mode = ssl.CERT_NONE
-                        self.sent_server.starttls(context=context)
-                        self.sent_server.ehlo()
-                    else:
-                        self.sent_server = smtplib.SMTP(
-                            self.email_config.sent_server_url,
-                            self.email_config.sent_server_port,
-                            timeout=30,
-                        )
-                    self.complete_init = True
-                    self.logger.info('邮差初始化成功')
+            self.logger.info("开始初始化邮差")
+
+
+            if self.email_config.server_type != 'smtp':
+                raise ValueError(f"不支持的服务器类型: {self.email_config.server_type}")
+
+            server_url = self.email_config.sent_server_url
+            server_port = self.email_config.sent_server_port
+
+
+            if not server_url or not server_port:
+                raise ValueError("服务器URL或端口未配置")
+
+            self.logger.info(f"连接SMTP服务器: {server_url}:{server_port}")
+
+
+            if self.email_config.sent_active_ssl:
+                self._create_ssl_connection(server_url, server_port)
             else:
-                self.complete_init = False
-                self.logger.error("无配置文件，无法完成邮差初始化")
+                self._create_plain_connection(server_url, server_port)
+
+
+            self.complete_init = True
+            self.logger.info('邮差初始化成功')
+
         except Exception as e:
             self.complete_init = False
-            self.logger.error(f'邮差初始化异常：{e}')
+            self.logger.error(f'邮差初始化失败: {e}')
+            self._cleanup_connection()
+            raise
+
+    def _create_ssl_connection(self, server_url: str, server_port: int):
+        self.logger.info("使用SSL方式连接")
+
+        context = self._create_ssl_context()
+
+        self.sent_server = smtplib.SMTP_SSL(
+            server_url,
+            server_port,
+            timeout=30,
+            context=context
+        )
+
+    def _create_plain_connection(self, server_url: str, server_port: int):
+
+        self.logger.info("使用普通SMTP连接")
+
+
+        self.sent_server = smtplib.SMTP(
+            server_url,
+            server_port,
+            timeout=30
+        )
+
+
+        self.sent_server.ehlo()
+
+        if self.email_config.sent_active_tls:
+            self._enable_starttls()
+
+    def _enable_starttls(self):
+
+        try:
+            self.logger.info("启用STARTTLS加密")
+
+
+            context = self._create_ssl_context()
+
+            self.sent_server.starttls(context=context)
+
+
+            self.sent_server.ehlo()
+
+        except Exception as e:
+            self.logger.error(f"启用STARTTLS失败: {e}")
+            raise
+
+    def _create_ssl_context(self):
+
+        context = ssl.create_default_context()
+
+
+        ignore_cert = getattr(self.email_config, 'ignore_cert_errors', False)
+        if ignore_cert:
+            self.logger.warning("已禁用证书验证，仅建议在开发环境使用")
+            context.check_hostname = False
+            context.verify_mode = ssl.CERT_NONE
+
+        return context
+
+    def _cleanup_connection(self):
+
+        if self.sent_server:
+            try:
+                self.sent_server.quit()
+            except Exception:
+                pass
+            finally:
+                self.sent_server = None
+                self.is_connected = False
 
     def _check_init_result(self) -> bool:
+
         self.logger.info('开始检查邮差是否完成初始化')
         if self.complete_init:
             self.logger.info('通过邮差初始化检查')
@@ -62,29 +143,40 @@ class Postman:
         return self.complete_init
 
     def _connect_server(self):
+
         self.logger.info('开始与Email服务器建立连接')
         try:
-            if not self.is_connected:
+            if not self.is_connected and self.sent_server:
                 self.sent_server.login(self.email_config.user_name, self.email_config.password)
                 self.is_connected = True
                 self.logger.info('已成功建立连接')
         except Exception as e:
-            self.logger.error(f'与Email服务器建立连接失败{e}')
+            self.logger.error(f'与Email服务器建立连接失败: {e}')
+            self.is_connected = False
+            raise
 
     def _ensure_connection(self):
-        if not hasattr(self, 'sent_server') or not self.is_connected:
+
+        if not self.sent_server or not self.is_connected:
             self._connect_server()
             return
+
+
         try:
             status = self.sent_server.noop()[0]
             if status != 250:
-                raise smtplib.SMTPException("Connection test failed")
-        except (smtplib.SMTPServerDisconnected, smtplib.SMTPException, AttributeError):
-            self.logger.info("连接已断开，正在重新连接...")
-            self.connection_active = False
+                raise smtplib.SMTPException("连接测试失败")
+        except (smtplib.SMTPServerDisconnected, smtplib.SMTPException, AttributeError) as e:
+            self.logger.info(f"连接已断开，正在重新连接: {e}")
+            self.is_connected = False
+
+            self._initialize_smtp_server()
             self._connect_server()
 
-    def _add_attachments(self, message, attachments):
+    def _add_attachments(self, message: MIMEMultipart, attachments: List[str]):
+
+        if not attachments:
+            return
 
         for file_path in attachments:
             try:
@@ -95,8 +187,11 @@ class Postman:
                 if not path.is_file():
                     self.logger.warning(f'路径不是文件: {path}')
                     continue
+
                 file_name = path.name
                 file_data = path.read_bytes()
+
+
                 mime_type, _ = mimetypes.guess_type(str(path))
                 if mime_type is None:
                     mime_type = 'application/octet-stream'
@@ -105,6 +200,7 @@ class Postman:
                 attachment_obj = MIMEBase(main_type, sub_type)
                 attachment_obj.set_payload(file_data)
                 encoders.encode_base64(attachment_obj)
+
                 attachment_obj.add_header(
                     'Content-Disposition',
                     'attachment',
@@ -117,21 +213,79 @@ class Postman:
                 self.logger.error(f'添加附件失败 {file_path}: {e}')
                 continue
 
-    def sent(self, _to_list, _cc_list, _subject, _body, attachments=None):
+    def send(self, to_list: List[str], subject: str, body: str,
+             cc_list: Optional[List[str]] = None, attachments: Optional[List[str]] = None,
+             body_type: str = 'plain'):
+
         self.logger.info('开始发送邮件')
+
         try:
+
+            if not self._check_init_result():
+                self.logger.error('邮差未初始化，无法发送邮件')
+                return False
+
+
             self._ensure_connection()
+
+
             message = MIMEMultipart()
             message['From'] = self.email_config.user_name
-            message['To'] = ', '.join(_to_list)
-            if _cc_list:
-                message['Cc'] = ', '.join(_cc_list)
-            message['Subject'] = _subject
-            message.attach(MIMEText(_body, 'plain'))
-            all_recipients = _to_list + (_cc_list if _cc_list else [])
+            message['To'] = ', '.join(to_list)
+            if cc_list:
+                message['Cc'] = ', '.join(cc_list)
+            message['Subject'] = subject
+
+
+            message.attach(MIMEText(body, body_type, 'utf-8'))
+
             if attachments:
-                self._add_attachments(message,attachments)
-            self.sent_server.sendmail(self.email_config.user_name, all_recipients, message.as_string())
-            self.logger.info('邮件发送成功')
+                self._add_attachments(message, attachments)
+
+
+            all_recipients = to_list + (cc_list if cc_list else [])
+
+
+            self.sent_server.sendmail(
+                self.email_config.user_name,
+                all_recipients,
+                message.as_string()
+            )
+
+            self.logger.info(f'邮件发送成功 - 收件人: {len(all_recipients)} 人')
+            return True
+
         except Exception as e:
-            self.logger.error(f'邮件发送失败{e}')
+            self.logger.error(f'邮件发送失败: {e}')
+            return False
+
+    # For backward compatibility, keep original method name
+    def sent(self, _to_list: List[str], _cc_list: Optional[List[str]],
+             _subject: str, _body: str, attachments: Optional[List[str]] = None):
+        """Compatibility method, recommend using send method"""
+        return self.send(_to_list, _subject, _body, _cc_list, attachments)
+
+    def close(self):
+        """Close connection"""
+        if self.sent_server and self.is_connected:
+            try:
+                self.sent_server.quit()
+                self.logger.info("SMTP connection closed")
+            except Exception as e:
+                self.logger.warning(f"Exception occurred while closing SMTP connection: {e}")
+            finally:
+                self.sent_server = None
+                self.is_connected = False
+                self.complete_init = False
+
+    def __del__(self):
+        """Destructor, ensure connection is properly closed"""
+        self.close()
+
+    def __enter__(self):
+        """Context manager entry"""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit"""
+        self.close()
