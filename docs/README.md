@@ -113,6 +113,14 @@ flet build windows -v
 ![](./images/email/flow.png)
 ## 更新日志
 
+### [0.3.0.2](https://github.com/MuskStark/SwissKit/tree/v0.3.0.2)
+
+新增
+
+- 现在支持初始化使用SSL的邮差
+
+> 因该版本修改数据库，需在安装前移除数据库中email_settings_config表
+
 ### [0.3.0.1](https://github.com/MuskStark/SwissKit/tree/v0.3.0.1)
 
 BugFix
