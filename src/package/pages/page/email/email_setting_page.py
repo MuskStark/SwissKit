@@ -24,8 +24,11 @@ class EmailSetting:
         self.password_value = None
 
         self.drop_down = ft.Dropdown(label='选择验证模式',
-                                options=[ft.dropdown.Option("smtp"),  # ft.dropdown.Option("pop3"),
-                                         ], on_change=lambda e: self._on_dropdown_change(e), width=200)
+                                     options=[ft.dropdown.Option("smtp"),  # ft.dropdown.Option("pop3"),
+                                              ], on_change=lambda e: self._on_dropdown_change(e), width=200)
+
+    def _create_ui_components(self):
+
 
         self.server_url_text = ft.TextField(label=self.label, value=self.sent_server_url_value, disabled=True)
         self.server_port_text = ft.TextField(label=self.label, value=self.sent_server_port_value, disabled=True)
@@ -33,7 +36,8 @@ class EmailSetting:
         self.tls_checkbox = ft.Checkbox(label="TLS", value=self.sent_active_tls_value)
 
         self.username_text = ft.TextField(label=self.user_name_label, value=self.user_name_value)
-        self.password_text = ft.TextField(label=self.password_label, value=self.password_value, password=True,can_reveal_password=True)
+        self.password_text = ft.TextField(label=self.password_label, value=self.password_value, password=True,
+                                          can_reveal_password=True)
 
     def _on_dropdown_change(self,e):
         server_type_label = f'请输入{e.control.value}服务器地址'
@@ -59,14 +63,9 @@ class EmailSetting:
             config_list = list(EmailSettingConfig.select())
 
         # ui
-        server = ft.Column(controls=[ft.Row(controls=[self.server_url_text, self.server_port_text],expand=True),
-                                     ft.Row(controls=[self.ssl_checkbox,self.tls_checkbox]),
-                                     ], expand=True)
-
-        auth = ft.Row(controls=[self.username_text, self.password_text], expand=True)
         # GET CONFIG FROM DATABASE
         if config_list:
-            _label = '已生效配置'
+            self.label = '已生效配置'
             self.drop_down.value = config_list[0].server_type
             self.sent_server_url_value = config_list[0].sent_server_url
             self.sent_server_port_value = config_list[0].sent_server_port
@@ -74,6 +73,15 @@ class EmailSetting:
             self.sent_active_tls_value = config_list[0].sent_active_tls
             self.user_name_value = config_list[0].user_name
             self.password_value = config_list[0].password
+
+        self._create_ui_components()
+
+        server = ft.Column(controls=[ft.Row(controls=[self.server_url_text, self.server_port_text], expand=True),
+                                     ft.Row(controls=[self.ssl_checkbox, self.tls_checkbox]),
+                                     ], expand=True)
+
+        auth = ft.Row(controls=[self.username_text, self.password_text], expand=True)
+
 
 
         self.logger.info('完成配置界面UI初始化')
