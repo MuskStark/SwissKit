@@ -113,6 +113,12 @@ flet build windows -v
 ![](./images/email/flow.png)
 ## 更新日志
 
+### [0.3.0.3](https://github.com/MuskStark/SwissKit/tree/v0.3.0.3)
+
+BugFix
+
+- 修复邮件设置信息无法被正确显示的Bug
+
 ### [0.3.0.2](https://github.com/MuskStark/SwissKit/tree/v0.3.0.2)
 
 新增
