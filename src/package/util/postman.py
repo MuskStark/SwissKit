@@ -57,28 +57,29 @@ class Postman:
             self._cleanup_connection()
             raise
 
+    def _create_ssl_context(self, security_level=2):
+        _context = ssl.create_default_context()
+
+        if security_level == 0:
+
+            _context.check_hostname = False
+            _context.verify_mode = ssl.CERT_NONE
+            _context.set_ciphers('ALL:@SECLEVEL=0')
+        elif security_level == 1:
+
+            _context.check_hostname = False
+            _context.verify_mode = ssl.CERT_NONE
+            _context.set_ciphers('DEFAULT@SECLEVEL=1')
+
+        return _context
+
     def _create_ssl_connection(self, server_url: str, server_port: int):
-        def _create_ssl_context(security_level=2):
-            _context = ssl.create_default_context()
-
-            if security_level == 0:
-
-                context.check_hostname = False
-                context.verify_mode = ssl.CERT_NONE
-                context.set_ciphers('ALL:@SECLEVEL=0')
-            elif security_level == 1:
-
-                _context.check_hostname = False
-                _context.verify_mode = ssl.CERT_NONE
-                _context.set_ciphers('DEFAULT@SECLEVEL=1')
-
-            return context
 
         self.logger.info("使用SSL方式连接")
 
         for _level in [2, 1, 0]:
             try:
-                context = _create_ssl_context(security_level=_level)
+                context = self._create_ssl_context(security_level=_level)
 
                 self.sent_server = smtplib.SMTP_SSL(
                     server_url,
