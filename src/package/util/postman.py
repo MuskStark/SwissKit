@@ -25,7 +25,6 @@ class Postman:
             self.logger.warning("无邮件配置，跳过邮差初始化")
             return
 
-
         self._initialize_smtp_server()
 
     def _initialize_smtp_server(self):
@@ -33,25 +32,21 @@ class Postman:
         try:
             self.logger.info("开始初始化邮差")
 
-
             if self.email_config.server_type != 'smtp':
                 raise ValueError(f"不支持的服务器类型: {self.email_config.server_type}")
 
             server_url = self.email_config.sent_server_url
             server_port = self.email_config.sent_server_port
 
-
             if not server_url or not server_port:
                 raise ValueError("服务器URL或端口未配置")
 
             self.logger.info(f"连接SMTP服务器: {server_url}:{server_port}")
 
-
             if self.email_config.sent_active_ssl:
                 self._create_ssl_connection(server_url, server_port)
             else:
                 self._create_plain_connection(server_url, server_port)
-
 
             self.complete_init = True
             self.logger.info('邮差初始化成功')
@@ -63,28 +58,66 @@ class Postman:
             raise
 
     def _create_ssl_connection(self, server_url: str, server_port: int):
+        def _create_ssl_context(security_level=2):
+            _context = ssl.create_default_context()
+
+            if security_level == 0:
+
+                context.check_hostname = False
+                context.verify_mode = ssl.CERT_NONE
+                context.set_ciphers('ALL:@SECLEVEL=0')
+            elif security_level == 1:
+
+                _context.check_hostname = False
+                _context.verify_mode = ssl.CERT_NONE
+                _context.set_ciphers('DEFAULT@SECLEVEL=1')
+
+            return context
+
         self.logger.info("使用SSL方式连接")
 
-        context = self._create_ssl_context()
+        for _level in [2, 1, 0]:
+            try:
+                context = _create_ssl_context(security_level=_level)
 
-        self.sent_server = smtplib.SMTP_SSL(
-            server_url,
-            server_port,
-            timeout=30,
-            context=context
-        )
+                self.sent_server = smtplib.SMTP_SSL(
+                    server_url,
+                    server_port,
+                    timeout=30,
+                    context=context
+                )
+
+                if _level < 2:
+                    self.logger.warning(f"使用降低的SSL安全级别({_level})连接成功")
+                else:
+                    self.logger.info("SSL连接成功")
+                break
+
+            except ssl.SSLError as e:
+                if "certificate key too weak" in str(e).lower() or "dh key too small" in str(e).lower():
+                    if _level > 0:
+                        self.logger.warning(f"SSL安全级别{_level}连接失败，尝试更宽松的设置")
+                        continue
+                    else:
+                        self.logger.error("所有SSL安全级别都失败")
+                        raise e
+                else:
+
+                    raise e
+            except Exception as e:
+                if _level == 0:
+                    raise e
+                continue
 
     def _create_plain_connection(self, server_url: str, server_port: int):
 
         self.logger.info("使用普通SMTP连接")
-
 
         self.sent_server = smtplib.SMTP(
             server_url,
             server_port,
             timeout=30
         )
-
 
         self.sent_server.ehlo()
 
@@ -96,30 +129,15 @@ class Postman:
         try:
             self.logger.info("启用STARTTLS加密")
 
-
             context = self._create_ssl_context()
 
             self.sent_server.starttls(context=context)
-
 
             self.sent_server.ehlo()
 
         except Exception as e:
             self.logger.error(f"启用STARTTLS失败: {e}")
             raise
-
-    def _create_ssl_context(self):
-
-        context = ssl.create_default_context()
-
-
-        ignore_cert = getattr(self.email_config, 'ignore_cert_errors', False)
-        if ignore_cert:
-            self.logger.warning("已禁用证书验证，仅建议在开发环境使用")
-            context.check_hostname = False
-            context.verify_mode = ssl.CERT_NONE
-
-        return context
 
     def _cleanup_connection(self):
 
@@ -161,7 +179,6 @@ class Postman:
             self._connect_server()
             return
 
-
         try:
             status = self.sent_server.noop()[0]
             if status != 250:
@@ -190,7 +207,6 @@ class Postman:
 
                 file_name = path.name
                 file_data = path.read_bytes()
-
 
                 mime_type, _ = mimetypes.guess_type(str(path))
                 if mime_type is None:
@@ -225,9 +241,7 @@ class Postman:
                 self.logger.error('邮差未初始化，无法发送邮件')
                 return False
 
-
             self._ensure_connection()
-
 
             message = MIMEMultipart()
             message['From'] = self.email_config.user_name
@@ -236,15 +250,12 @@ class Postman:
                 message['Cc'] = ', '.join(cc_list)
             message['Subject'] = subject
 
-
             message.attach(MIMEText(body, body_type, 'utf-8'))
 
             if attachments:
                 self._add_attachments(message, attachments)
 
-
             all_recipients = to_list + (cc_list if cc_list else [])
-
 
             self.sent_server.sendmail(
                 self.email_config.user_name,
