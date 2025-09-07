@@ -9,14 +9,15 @@ class MultiSelectComponent(ft.Container):
     支持单个选项选择/取消、全选、清除所有选项
     """
 
-    def __init__(self, dropdown_label: str = None, options: list[str] = None, title="多选组件", on_change=None, layout=Layout.Horizontal):
+    def __init__(self, dropdown_label: str = None, options: list[str] = None, title="多选组件", tag_list: list[str]=None, on_change=None, layout=Layout.Horizontal):
         super().__init__()
         self.dropdown_label = dropdown_label or "选择选项"
         self.options_list = options or []
         self.control_name = title
         self.on_change = on_change
-        self.tag_list = []
+        self.tag_list = tag_list or []
         self.layout = layout
+        self.need_update_page = False
 
         # 创建组件
         self.dropdown = ft.Dropdown(
@@ -30,14 +31,17 @@ class MultiSelectComponent(ft.Container):
 
         if self.layout == Layout.Horizontal:
             self.content = ft.Row(controls=[self.dropdown, self.tag_display], expand=True)
-        if self.layout == Layout.Vertical:
+        elif self.layout == Layout.Vertical:
             self.content = ft.Column(controls=[self.dropdown, self.tag_display], expand=True)
+        if self.tag_list:
+            self.need_update_page =True
 
         self.expand = True
 
     def did_mount(self):
         """控件挂载后的回调"""
-        pass
+        if self.need_update_page:
+            self._update_tag_display()
 
     def will_unmount(self):
         """控件卸载前的回调"""
@@ -76,7 +80,10 @@ class MultiSelectComponent(ft.Container):
                 margin=ft.margin.only(right=4, bottom=4)
             )
             self.tag_display.controls.append(chip)
-        self.update()
+        try:
+            self.update()
+        except AttributeError:
+            pass
 
     def _remove_item(self, item):
         if item in self.tag_list:
