@@ -249,16 +249,19 @@ class EmailInfo:
                 info.email_address = address.value
                 info.email_tag = str(email_tag_multi_selector.get_selected_values())
                 info.save()
+            _close_dlg()
         def _delete_email_info():
             self.logger.info(f'开始删除邮件地址 {old_email_address}')
             info = EmailAddressInfo.get_or_none(EmailAddressInfo.email_address == old_email_address)
             if info is not None:
                 info.delete_instance()
-                self._update_info_page()
-
                 self.logger.info(f'邮件地址 {old_email_address} 已成功删除')
             else:
                 self.logger.warning(f'未找到邮件地址 {old_email_address}，无法删除')
+            _close_dlg()
+
+        def _close_dlg():
+            self._update_info_page()
             dlg.open = False
             self.page.update()
 
