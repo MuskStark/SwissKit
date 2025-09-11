@@ -115,11 +115,16 @@ flet build windows -v
 
 ### [0.3.0.3](https://github.com/MuskStark/SwissKit/tree/v0.3.0.3)
 
+新增
+
+- 新增支持删除邮件地址信息
+
 BugFix
 
 - 修复邮件设置信息无法被正确显示的Bug
 - 修复分组信息删除后未同步删除邮件地址信息中对应的分组
 - 修复无法修改邮件地址的Bug
+- 修复在编辑完成邮件地址信息后，对话框无法自动关闭的Bug
 
 ### [0.3.0.2](https://github.com/MuskStark/SwissKit/tree/v0.3.0.2)
 
