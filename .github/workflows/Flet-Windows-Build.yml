@@ -2,7 +2,7 @@ name: Flet Windows Build with Installer
 
 on:
   push:
-    tags: ['v*']
+    tags: [ 'v*' ]
   workflow_dispatch:
     inputs:
       test_version:
@@ -27,7 +27,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.0'
+          flutter-version: '3.29.2'
           channel: 'stable'
 
       - name: Install uv
@@ -163,7 +163,7 @@ jobs:
             Result := True;
             PrevVersion := GetPreviousData('Version', '');
             CurVersion := '$versionClean';
-            
+          
             if PrevVersion <> '' then
             begin
               if MsgBox('SwissKit version ' + PrevVersion + ' is already installed. ' +
