@@ -1,6 +1,6 @@
 [project]
 name = "SwissKit"
-version = "v0.3.0"
+version = "v0.3.1"
 description = ""
 readme = "README.md"
 requires-python = ">=3.11"
@@ -8,18 +8,18 @@ authors = [
     { name = "Summer", email = "gitman@outlook.sg" }
 ]
 dependencies = [
-  "certifi>=2025.7.14",
-  "flet==0.28.2",
-  "openpyxl>=3.1.5",
-  "pandas>=2.3.1",
-  "pandas-stubs==2.3.0.250703",
-  "peewee>=3.18.2",
-  "picologging>=0.9.3",
-  "pypinyin>=0.55.0",
-  "python-levenshtein>=0.27.1",
-  "pyyaml>=6.0.2",
-  "requests>=2.32.4",
-  "urllib3>=2.5.0",
+    "certifi>=2025.7.14",
+    "flet==0.28.2",
+    "openpyxl>=3.1.5",
+    "pandas>=2.3.1",
+    "pandas-stubs==2.3.0.250703",
+    "peewee>=3.18.2",
+    "picologging>=0.9.3",
+    "pypinyin>=0.55.0",
+    "python-levenshtein>=0.27.1",
+    "pyyaml>=6.0.2",
+    "requests>=2.32.4",
+    "urllib3>=2.5.0",
 ]
 
 [tool.flet]
@@ -53,4 +53,4 @@ dev-dependencies = [
 package-mode = false
 
 [tool.poetry.group.dev.dependencies]
-flet = {extras = ["all"], version = "0.28.2"}
+flet = { extras = ["all"], version = "0.28.2" }

@@ -118,7 +118,7 @@ flet build windows -v
 
 ## 更新日志
 
-### [0.3.0.3](https://github.com/MuskStark/SwissKit/tree/v0.3.0.3)
+### [0.3.1](https://github.com/MuskStark/SwissKit/tree/v0.3.0.3)
 
 新增
 
