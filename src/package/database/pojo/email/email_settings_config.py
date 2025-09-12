@@ -11,6 +11,7 @@ class EmailSettingConfig(PojoBase):
     sent_server_url = CharField(max_length=50)
     sent_server_port = IntegerField()
     sent_active_ssl = BooleanField()
+    sent_active_tls = BooleanField()
     user_name = CharField(max_length=50)
     password = CharField(max_length=50)
 

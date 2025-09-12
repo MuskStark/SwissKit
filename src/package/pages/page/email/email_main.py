@@ -1,6 +1,6 @@
 import flet as ft
 
-from .email_info_page import EmailInfo
+from .email_info_page_v2 import EmailInfo
 from .email_setting_page import EmailSetting
 from ...toolbox_page import ToolBoxPage
 from ....database.database_obj import DataBaseObj
@@ -26,7 +26,7 @@ class Email(ToolBoxPage):
             if _e.control.selected_index == 0:
                 _tabs.tabs[0].content = self.email_editor.email_sent_page()
             if _e.control.selected_index == 1:
-                _tabs.tabs[1].content = self.email_info.email_group_page()
+                _tabs.tabs[1].content = self.email_info.email_info_page()
             if _e.control.selected_index == 2:
                 _tabs.tabs[2].content = self.email_setting.setting_page()
             _tabs.update()

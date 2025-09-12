@@ -6,25 +6,29 @@ from peewee import OperationalError
 
 from ....components.file_or_path_picker import FileOrPathPicker
 from ....components.multi_select_component import MultiSelectComponent
+from ....components.progress_ring_components import ProgressRingComponent
 from ....database.database_obj import DataBaseObj
 from ....database.pojo.email.email_address import EmailAddressInfo
 from ....database.pojo.email.email_group import EmailGroup
 from ....database.pojo.email.email_settings_config import EmailSettingConfig
 from ....enums.layout_enums import Layout
+from ....enums.progress_status_enums import ProgressStatus
 from ....util.postman import Postman
 
 
 class EmailEditor:
-    def __init__(self, page, logger, database_pojo:DataBaseObj):
+    def __init__(self, page, logger, database_pojo: DataBaseObj):
         self.page = page
         self.logger = logger
         self.database = database_pojo
+
+        self.progress_ring = ProgressRingComponent()
 
         # init dropdownOptions
         self.logger.info('开始加载分组信息')
         try:
             self.group_name_option = list(EmailGroup.select())
-        except OperationalError as  e:
+        except OperationalError as e:
             self.logger.info('缺少所需数据表，开始创建')
             self.database.creat_table([EmailGroup])
             self.logger.info('完成数据表创建')
@@ -94,64 +98,79 @@ class EmailEditor:
             return files_path_list
 
         def _sent_email():
-            if EmailSettingConfig.table_exists():
-                config_list = list(EmailSettingConfig.select())
-                if config_list:
-                    self.logger.info('使用邮件配置信息初始化邮差')
-                    postman = Postman(_email_config=config_list[0], _logger=self.logger)
-                    to_tag_list = to_text_field.get_selected_values()
-                    cc_tag_list = cc_text_field.get_selected_values()
-                    to_list = []
-                    cc_list = []
-                    if check_box.value:
-                        attachment_dic = {}
-                        attachment_path = Path(path_picker.get_pick_value())
-                        if attachment_path.exists() and attachment_path.is_dir():
-                            all_file = [file.name for file in attachment_path.iterdir() if file.is_file()]
-                            for file in all_file:
-                                if split_separator.value in Path(file).stem:
-                                    file_name = Path(file).stem
-                                    tag_from_file = file_name.rsplit(split_separator.value, 1)[-1]
-                                    if tag_from_file in attachment_dic.keys():
-                                        attachment_dic[tag_from_file].append(str(Path(attachment_path, file)))
-                                    else:
-                                        attachment_dic[tag_from_file] = [str(Path(attachment_path, file))]
-                        if attachment_dic:
-                            for tag, file_list in attachment_dic.items():
-                                att_to_list = []
-                                att_cc_list = []
-                                email_pojo_list = [addr for addr in list(EmailAddressInfo.select().where(EmailAddressInfo.email_tag.contains(tag)))]
-                                if to_tag_list or cc_tag_list:
-                                    for email_pojo in email_pojo_list:
-                                        if to_tag_list:
-                                            for _to in to_tag_list:
-                                                if _to in ast.literal_eval(email_pojo.email_tag):
-                                                    att_to_list.append(email_pojo.email_address)
-                                        if cc_tag_list:
-                                            for _cc in cc_tag_list:
-                                                if _cc in ast.literal_eval(email_pojo.email_tag):
-                                                    att_cc_list.append(email_pojo.email_address)
-                                if len(att_to_list) == 0:
-                                    att_to_list = [pojo.email_address for pojo in email_pojo_list]
-                                postman.sent(att_to_list, att_cc_list, subject_text_field.value,
-                                             content_text_field.value, file_list)
+            try:
+                if EmailSettingConfig.table_exists():
+                    config_list = list(EmailSettingConfig.select())
+                    if config_list:
+                        self.logger.info('使用邮件配置信息初始化邮差')
+                        self.progress_ring.update_status(ProgressStatus.LOADING, '使用邮件配置信息初始化邮差')
+                        postman = Postman(_email_config=config_list[0], _logger=self.logger)
+                        to_tag_list = to_text_field.get_selected_values()
+                        cc_tag_list = cc_text_field.get_selected_values()
+                        to_list = []
+                        cc_list = []
+                        if check_box.value:
+                            attachment_dic = {}
+                            attachment_path = Path(path_picker.get_pick_value())
+                            if attachment_path.exists() and attachment_path.is_dir():
+                                all_file = [file.name for file in attachment_path.iterdir() if file.is_file()]
+                                for file in all_file:
+                                    if split_separator.value in Path(file).stem:
+                                        file_name = Path(file).stem
+                                        tag_from_file = file_name.rsplit(split_separator.value, 1)[-1]
+                                        if tag_from_file in attachment_dic.keys():
+                                            attachment_dic[tag_from_file].append(str(Path(attachment_path, file)))
+                                        else:
+                                            attachment_dic[tag_from_file] = [str(Path(attachment_path, file))]
+                            if attachment_dic:
+                                for tag, file_list in attachment_dic.items():
+                                    att_to_list = []
+                                    att_cc_list = []
+                                    email_pojo_list = [addr for addr in list(
+                                        EmailAddressInfo.select().where(EmailAddressInfo.email_tag.contains(tag)))]
+                                    if to_tag_list or cc_tag_list:
+                                        for email_pojo in email_pojo_list:
+                                            if to_tag_list:
+                                                for _to in to_tag_list:
+                                                    if _to in ast.literal_eval(email_pojo.email_tag):
+                                                        att_to_list.append(email_pojo.email_address)
+                                            if cc_tag_list:
+                                                for _cc in cc_tag_list:
+                                                    if _cc in ast.literal_eval(email_pojo.email_tag):
+                                                        att_cc_list.append(email_pojo.email_address)
+                                    if len(att_to_list) == 0:
+                                        att_to_list = [pojo.email_address for pojo in email_pojo_list]
+                                    self.progress_ring.update_status(ProgressStatus.LOADING,
+                                                                     f'正在发送邮件给{att_to_list}')
+                                    postman.sent(att_to_list, att_cc_list, subject_text_field.value,
+                                                 content_text_field.value, file_list)
 
+                        else:
+                            for to_tag in to_tag_list:
+                                to_list.extend([addr.email_address for addr in list(
+                                    EmailAddressInfo.select().where(EmailAddressInfo.email_tag.contains(to_tag)))])
+                            for cc_tag in cc_tag_list:
+                                cc_list.extend([addr.email_address for addr in list(
+                                    EmailAddressInfo.select().where(EmailAddressInfo.email_tag.contains(cc_tag)))])
+                            self.progress_ring.update_status(ProgressStatus.LOADING, f'正在发送邮件给{to_list}')
+                            postman.sent(to_list, cc_list, subject_text_field.value,
+                                         content_text_field.value, _get_attachments_list(files))
+                        self.progress_ring.update_status(ProgressStatus.SUCCESS, f'完成邮件发送')
                     else:
-                        for to_tag in to_tag_list:
-                            to_list.extend([addr.email_address for addr in list(
-                                EmailAddressInfo.select().where(EmailAddressInfo.email_tag.contains(to_tag)))])
-                        for cc_tag in cc_tag_list:
-                            cc_list.extend([addr.email_address for addr in list(
-                                EmailAddressInfo.select().where(EmailAddressInfo.email_tag.contains(cc_tag)))])
-
-                        postman.sent(to_list, cc_list, subject_text_field.value,
-                                     content_text_field.value, _get_attachments_list(files))
+                        self.progress_ring.update_status(ProgressStatus.ERROR, '无配置文件，无法初始化邮差')
+                        self.logger.warning('无配置文件，无法初始化邮差')
                 else:
-                    self.logger.warning('无配置文件，无法初始化邮差')
-            else:
-                self.logger.error('无数据表，无法初始化邮差')
+                    self.progress_ring.update_status(ProgressStatus.ERROR, '无数据表，无法初始化邮差')
+                    self.logger.error('无数据表，无法初始化邮差')
+            except Exception as e:
+                self.logger.error(e)
+                self.progress_ring.update_status(ProgressStatus.ERROR, f'{e}')
 
-        sent_button = ft.ElevatedButton(text='发送', on_click=lambda _: _sent_email())
+        def _sent_email_async():
+            import threading
+            threading.Thread(target=_sent_email, daemon=True).start()
+
+        sent_button = ft.ElevatedButton(text='发送', on_click=lambda _: _sent_email_async())
         self.logger.info('完成邮件发送界面UI初始化')
         return ft.Container(content=ft.Column(controls=[to_component, cc_component, subject_text_field,
                                                         ft.Container(content=ft.Column(controls=[content_text_field],
@@ -166,7 +185,9 @@ class EmailEditor:
                                                         batch_file_folder,
                                                         ft.Row(controls=[sent_button],
                                                                alignment=ft.MainAxisAlignment.CENTER,
-                                                               expand=True), ],
+                                                               expand=True),
+                                                        self.progress_ring
+                                                        ],
                                               expand=True),
                             margin=ft.Margin(left=0, right=0, top=10, bottom=0)
                             )
