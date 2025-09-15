@@ -118,7 +118,13 @@ flet build windows -v
 
 ## 更新日志
 
-### [0.3.1](https://github.com/MuskStark/SwissKit/tree/v0.3.0.3)
+### [0.3.1.1](https://github.com/MuskStark/SwissKit/tree/v0.3.1.1)
+
+优化
+
+- 优化邮件分组信息维护与删除逻辑
+
+### [0.3.1](https://github.com/MuskStark/SwissKit/tree/v0.3.1)
 
 新增
 
