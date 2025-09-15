@@ -57,23 +57,23 @@ class EmailInfo:
 
     # page ui
 
-    def email_info_page(self)-> ft.Container:
+    def email_info_page(self) -> ft.Container:
         self.logger.info('开始初始化邮件分组界面')
 
         # button
-        email_address_bt = ft.ElevatedButton('维护邮件地址',on_click= lambda _: self._open_email_address_modify_alg())
+        email_address_bt = ft.ElevatedButton('维护邮件地址', on_click=lambda _: self._open_email_address_modify_alg())
         group_info_bt = ft.ElevatedButton('维护分组信息',
                                           on_click=lambda _: self._open_group_modify_alg())
         self._load_table_data()
 
-
-
         return ft.Container(
             content=
             ft.Column(controls=[
-                ft.Column(controls=[email_address_bt, ft.Container(content=ft.Column(controls=[self.email_address_table], scroll=ft.ScrollMode.AUTO), height=200),]),
-                ft.Column(controls=[group_info_bt, ft.Container(content=ft.Column(controls=[self.group_info_table], scroll=ft.ScrollMode.AUTO),
-                     height=200)])
+                ft.Column(controls=[email_address_bt, ft.Container(
+                    content=ft.Column(controls=[self.email_address_table], scroll=ft.ScrollMode.AUTO), height=200), ]),
+                ft.Column(controls=[group_info_bt, ft.Container(
+                    content=ft.Column(controls=[self.group_info_table], scroll=ft.ScrollMode.AUTO),
+                    height=200)])
             ],
                 spacing=10,
                 expand=True
@@ -112,7 +112,7 @@ class EmailInfo:
                 group_table_row_list.append(ft.DataRow(
                     [ft.DataCell(ft.Text(group.group_name))],
                     on_select_changed=(lambda _group:
-                                       lambda e: self._delete_group_info(_group.group_name)
+                                       lambda e: self._open_group_modify_alg(_group.group_name, 1)
                                        )(group),
                 ))
         else:
@@ -120,7 +120,7 @@ class EmailInfo:
         self.group_info_table.rows = group_table_row_list
 
     # dlg component
-    def _get_dlg(self, dlg_title:str):
+    def _get_dlg(self, dlg_title: str) -> ft.AlertDialog:
         self.logger.info('开始初始化弹窗')
         dlg = ft.AlertDialog(
             title=ft.Text(dlg_title),
@@ -133,6 +133,14 @@ class EmailInfo:
         self.logger.info('完成弹窗初始化')
         return dlg
 
+    def _close_dlg(self, dlg: ft.AlertDialog):
+        self.logger.info(f'开始关闭{dlg.title}对话框')
+        self.logger.info('刷新界面')
+        self._update_info_page()
+        dlg.open = False
+        self.page.update()
+        self.logger.info(f'完成{dlg.title}对话框关闭')
+
     # update page
     def _update_info_page(self):
         self._load_table_data()
@@ -140,15 +148,26 @@ class EmailInfo:
 
     # email_group_info function
 
-    def _open_group_modify_alg(self):
+    def _open_group_modify_alg(self, group_name_value: str = None, model: int = 0):
         # generate dlg ui
         dlg = self._get_dlg('新增邮件分组标签')
         group_name = ft.TextField(label='请输入分组名称')
         group_modify_bt = ft.ElevatedButton('维护分组', on_click=lambda _: _modify_info())
 
-        content = ft.Container(content=
-                               ft.Column(controls=[group_name, group_modify_bt])
-                               )
+        if model != 0:
+            dlg = self._get_dlg('删除分组标签')
+            group_name.value = group_name_value
+            group_name.disabled = True
+            group_delete_bt = ft.ElevatedButton('删除分组',
+                                                on_click=lambda _: self._delete_group_info(group_name_value, dlg))
+            content = ft.Container(content=
+                                   ft.Column(controls=[group_name, group_delete_bt])
+                                   )
+        else:
+            content = ft.Container(content=
+                                   ft.Column(controls=[group_name, group_modify_bt])
+                                   )
+
         dlg.content.content = content
         dlg.open = True
         self.page.update()
@@ -162,10 +181,9 @@ class EmailInfo:
                 self.logger.info(f'完成分组写入{group_name.value}')
             else:
                 self.logger.warning('已存在分组信息')
-            dlg.open = False
-                # update email info page
+            self._close_dlg(dlg)
 
-    def _delete_group_info(self,group_name:str):
+    def _delete_group_info(self, group_name: str, dlg: ft.AlertDialog):
         self.logger.info(f'开始删除{group_name}')
         EmailGroup.delete().where(EmailGroup.group_name == group_name).execute()
         # delete tag from email address tab
@@ -185,6 +203,7 @@ class EmailInfo:
             self.logger.info(f'Email_Address表中无数据, 无需清理')
         self._update_info_page()
         self.logger.info(f'删除{group_name}结束')
+        self._close_dlg(dlg)
 
     def _update_group_data_table(self, table: ft.DataTable):
         # load data from database
@@ -206,9 +225,8 @@ class EmailInfo:
         self.page.update()
         self.logger.info('完成邮件分组信息表更新')
 
-
     # email_address function
-    def _open_email_address_modify_alg(self, model:int=0, old_email_address:str=None, old_tags:list[str]=None):
+    def _open_email_address_modify_alg(self, model: int = 0, old_email_address: str = None, old_tags: list[str] = None):
         if model == 0:
             dlg_title = '新增邮件地址信息'
         else:
@@ -231,14 +249,15 @@ class EmailInfo:
         save_bt = ft.ElevatedButton('维护', on_click=lambda _: _modify_email_info())
 
         if model == 0:
-            content = ft.Column(controls=[address,email_tag_multi_selector,save_bt])
+            content = ft.Column(controls=[address, email_tag_multi_selector, save_bt])
         else:
             delete_bt = ft.ElevatedButton('删除', on_click=lambda _: _delete_email_info())
-            content = ft.Column(controls=[address, email_tag_multi_selector, ft.Row(controls=[save_bt,delete_bt])])
+            content = ft.Column(controls=[address, email_tag_multi_selector, ft.Row(controls=[save_bt, delete_bt])])
 
         dlg.content.content = content
         dlg.open = True
         self.page.update()
+
         # dlg function
         def _modify_email_info():
             if model != 0:
@@ -249,7 +268,8 @@ class EmailInfo:
                 info.email_address = address.value
                 info.email_tag = str(email_tag_multi_selector.get_selected_values())
                 info.save()
-            _close_dlg()
+            self._close_dlg(dlg)
+
         def _delete_email_info():
             self.logger.info(f'开始删除邮件地址 {old_email_address}')
             info = EmailAddressInfo.get_or_none(EmailAddressInfo.email_address == old_email_address)
@@ -258,14 +278,4 @@ class EmailInfo:
                 self.logger.info(f'邮件地址 {old_email_address} 已成功删除')
             else:
                 self.logger.warning(f'未找到邮件地址 {old_email_address}，无法删除')
-            _close_dlg()
-
-        def _close_dlg():
-            self._update_info_page()
-            dlg.open = False
-            self.page.update()
-
-
-
-
-
+            self._close_dlg(dlg)

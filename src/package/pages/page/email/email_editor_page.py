@@ -1,8 +1,8 @@
 import ast
+import time
 from pathlib import Path
 
 import flet as ft
-from peewee import OperationalError
 
 from ....components.file_or_path_picker import FileOrPathPicker
 from ....components.multi_select_component import MultiSelectComponent
@@ -10,6 +10,7 @@ from ....components.progress_ring_components import ProgressRingComponent
 from ....database.database_obj import DataBaseObj
 from ....database.pojo.email.email_address import EmailAddressInfo
 from ....database.pojo.email.email_group import EmailGroup
+from ....database.pojo.email.email_sent_log import EmailSentLog
 from ....database.pojo.email.email_settings_config import EmailSettingConfig
 from ....enums.layout_enums import Layout
 from ....enums.progress_status_enums import ProgressStatus
@@ -26,13 +27,11 @@ class EmailEditor:
 
         # init dropdownOptions
         self.logger.info('开始加载分组信息')
-        try:
-            self.group_name_option = list(EmailGroup.select())
-        except OperationalError as e:
-            self.logger.info('缺少所需数据表，开始创建')
-            self.database.creat_table([EmailGroup])
-            self.logger.info('完成数据表创建')
-            self.group_name_option = None
+        self.logger.info('初始化数据库')
+        self.database.creat_table([EmailGroup, EmailSentLog])
+        self.group_name_option = list(EmailGroup.select()) or None
+        self.logger.info('完成数据表创建')
+
         if self.group_name_option is None:
             self.group_name_option = []
         else:
@@ -142,8 +141,11 @@ class EmailEditor:
                                         att_to_list = [pojo.email_address for pojo in email_pojo_list]
                                     self.progress_ring.update_status(ProgressStatus.LOADING,
                                                                      f'正在发送邮件给{att_to_list}')
-                                    postman.sent(att_to_list, att_cc_list, subject_text_field.value,
+                                    is_success = postman.send(att_to_list, att_cc_list, subject_text_field.value,
                                                  content_text_field.value, file_list)
+                                    self._save_email_send_log(str(att_to_list),str(att_cc_list), subject_text_field.value, content_text_field.value, str(file_list), is_success)
+
+
 
                         else:
                             for to_tag in to_tag_list:
@@ -153,8 +155,10 @@ class EmailEditor:
                                 cc_list.extend([addr.email_address for addr in list(
                                     EmailAddressInfo.select().where(EmailAddressInfo.email_tag.contains(cc_tag)))])
                             self.progress_ring.update_status(ProgressStatus.LOADING, f'正在发送邮件给{to_list}')
-                            postman.sent(to_list, cc_list, subject_text_field.value,
+                            is_success = postman.sent(to_list, cc_list, subject_text_field.value,
                                          content_text_field.value, _get_attachments_list(files))
+                            self._save_email_send_log(str(to_list), str(cc_list), subject_text_field.value,
+                                                      content_text_field.value, str(_get_attachments_list(files)), is_success)
                         self.progress_ring.update_status(ProgressStatus.SUCCESS, f'完成邮件发送')
                     else:
                         self.progress_ring.update_status(ProgressStatus.ERROR, '无配置文件，无法初始化邮差')
@@ -168,6 +172,7 @@ class EmailEditor:
 
         def _sent_email_async():
             import threading
+            time.sleep(0.3)
             threading.Thread(target=_sent_email, daemon=True).start()
 
         sent_button = ft.ElevatedButton(text='发送', on_click=lambda _: _sent_email_async())
@@ -191,3 +196,17 @@ class EmailEditor:
                                               expand=True),
                             margin=ft.Margin(left=0, right=0, top=10, bottom=0)
                             )
+
+
+    def _save_email_send_log(self,to:str,cc:str, subject:str, body:str, attchments:str, status):
+        self.logger.info('开始记录邮件发送转态')
+        email_sent_log = EmailSentLog()
+        email_sent_log.to = to
+        email_sent_log.cc = cc
+        email_sent_log.subject = subject
+        email_sent_log.body = body
+        email_sent_log.attachment = attchments
+        email_sent_log.is_success = status
+        email_sent_log.save()
+        self.logger.info('完成邮件发送状态记录')
+
