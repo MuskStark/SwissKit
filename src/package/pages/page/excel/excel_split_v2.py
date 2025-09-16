@@ -11,10 +11,10 @@ import flet as ft
 import pandas as pd
 from openpyxl import load_workbook
 
-from ..toolbox_page import ToolBoxPage
-from ...components.progress_ring_components import ProgressRingComponent
-from ...enums.progress_status_enums import ProgressStatus
-from ...util.excel_util import ExcelHeaderExtractor
+from ....components.progress_ring_components import ProgressRingComponent
+from ....enums.progress_status_enums import ProgressStatus
+from ....pages.toolbox_page import ToolBoxPage
+from ....util.excel_util import ExcelHeaderExtractor
 
 
 def open_folder_in_explorer(path):
@@ -47,12 +47,14 @@ class ExcelSplitPageV2(ToolBoxPage):
         self.disable = True
         self.excel = None
         self.checkBox = ft.Checkbox(label='拆分后打开输出文件夹', value=True)
+
     # 内部类
     class ExcelObject:
         def __init__(self, file_path: str):
             self.file_path = file_path
             self.sheets = {}
-        def add_sheet(self,sheet_name:str, sheet_obj):
+
+        def add_sheet(self, sheet_name: str, sheet_obj):
             if sheet_name in self.sheets:
                 raise ValueError(f"Sheet '{sheet_name}' already exists.")
             self.sheets[sheet_name] = sheet_obj
@@ -66,9 +68,9 @@ class ExcelSplitPageV2(ToolBoxPage):
         def __repr__(self):
             return f"ExcelSheet(sheet_name={self.sheet_name}, columns={self.columns})"
 
-
     # public
-    def _load_excel_file(self, file_path_text: ft.TextField,progress: ProgressRingComponent,tab_page:ft.Tabs, advance_model:bool=False):
+    def _load_excel_file(self, file_path_text: ft.TextField, progress: ProgressRingComponent, tab_page: ft.Tabs,
+                         advance_model: bool = False):
         """
         Load an Excel file and parse its content into the application's internal data structure.
 
@@ -96,10 +98,10 @@ class ExcelSplitPageV2(ToolBoxPage):
                 if file_path.suffix == '.xlsx':
                     excel_obj = self.ExcelObject(file_path_text.value)
                     progress.update_status(ProgressStatus.LOADING, '开始解析Excel文件')
-                    if not advance_model :
+                    if not advance_model:
                         all_sheets_dict = pd.read_excel(file_path, sheet_name=None, dtype=str)
                         for sheet_name, sheet_data in all_sheets_dict.items():
-                            sheet_obj = self.ExcelSheetObject(sheet_name,sheet_data.columns.tolist(), sheet_data)
+                            sheet_obj = self.ExcelSheetObject(sheet_name, sheet_data.columns.tolist(), sheet_data)
                             excel_obj.add_sheet(sheet_name, sheet_obj)
                         if self.excel is not None:
                             self.excel = None
@@ -109,13 +111,13 @@ class ExcelSplitPageV2(ToolBoxPage):
                         for _sheet in excel_file.sheet_names:
                             sheet_obj = self.ExcelSheetObject(_sheet, None, pd.DataFrame())
                             excel_obj.add_sheet(_sheet, sheet_obj)
-                    tab_page.visible=True
+                    tab_page.visible = True
                     progress.update_status(ProgressStatus.SUCCESS, '完成解析')
                     self.page.update()
                 else:
-                    progress.update_status(ProgressStatus.ERROR,'请使用xlsx格式')
+                    progress.update_status(ProgressStatus.ERROR, '请使用xlsx格式')
             else:
-                progress.update_status(ProgressStatus.ERROR,'文件路径为空')
+                progress.update_status(ProgressStatus.ERROR, '文件路径为空')
         except Exception as e:
             progress.update_status(ProgressStatus.ERROR, str(e))
 
@@ -137,7 +139,7 @@ class ExcelSplitPageV2(ToolBoxPage):
                 file_path_text.value = e.path
         self.page.update()
 
-    def _tab_change(self, e, output_folder_path_text:ft.TextField, _tabs:ft.Tabs):
+    def _tab_change(self, e, output_folder_path_text: ft.TextField, _tabs: ft.Tabs):
         """
         Handle tab change event to update the content of the first tab with split Excel data.
 
@@ -157,8 +159,7 @@ class ExcelSplitPageV2(ToolBoxPage):
             # e.control.tabs[1].content = self._split_excel(output_folder_path_text)
             e.page.update()
 
-
-    def _split_excel(self, output_folder_path_text:ft.TextField):
+    def _split_excel(self, output_folder_path_text: ft.TextField):
         """
         Splits an Excel file into multiple files based on the selected sheets and a common column.
 
@@ -173,7 +174,8 @@ class ExcelSplitPageV2(ToolBoxPage):
         :returns:
             ft.Column: A column component containing the UI elements for selecting sheets, choosing a common column, and starting the split process.
         """
-        def after_select_check_box(_check_box_list_components, _drop_down:ft.Dropdown):
+
+        def after_select_check_box(_check_box_list_components, _drop_down: ft.Dropdown):
             _columns_set = None
             for box in check_box_list_components.controls:
                 checkbox = cast(ft.Checkbox, box)
@@ -184,7 +186,8 @@ class ExcelSplitPageV2(ToolBoxPage):
             _drop_down.options = [ft.DropdownOption(value) for value in _columns_set]
             _drop_down.update()
 
-        def split_logic(_folder_path_text:ft.TextField, _check_box_list_components, _drop_down:ft.Dropdown, _process_ring:ProgressRingComponent):
+        def split_logic(_folder_path_text: ft.TextField, _check_box_list_components, _drop_down: ft.Dropdown,
+                        _process_ring: ProgressRingComponent):
             result_dic = {}  # 初始化为空字典而不是None
             _process_ring.update_status(ProgressStatus.LOADING, "开始拆分")
 
@@ -222,29 +225,35 @@ class ExcelSplitPageV2(ToolBoxPage):
         if self.excel is None:
             return None
         else:
-            check_box_list_components = ft.Row(alignment=ft.MainAxisAlignment.CENTER,expand=True)
+            check_box_list_components = ft.Row(alignment=ft.MainAxisAlignment.CENTER, expand=True)
             for sheet_name in self.excel.sheets.keys():
                 check_box = ft.Checkbox(label=sheet_name, value=False)
                 check_box_list_components.controls.append(check_box)
-            get_columns_button = ft.ElevatedButton(text='获取可拆分列', on_click= lambda _: after_select_check_box(check_box_list_components,drop_down))
-            drop_down = ft.Dropdown(options=[],width=200)
+            get_columns_button = ft.ElevatedButton(text='获取可拆分列',
+                                                   on_click=lambda _: after_select_check_box(check_box_list_components,
+                                                                                             drop_down))
+            drop_down = ft.Dropdown(options=[], width=200)
             processing_ring = ProgressRingComponent()
-            start_analyze = ft.ElevatedButton(text='开始拆分', on_click=lambda _:split_logic(output_folder_path_text, check_box_list_components, drop_down, processing_ring))
+            start_analyze = ft.ElevatedButton(text='开始拆分', on_click=lambda _: split_logic(output_folder_path_text,
+                                                                                              check_box_list_components,
+                                                                                              drop_down,
+                                                                                              processing_ring))
 
             return ft.Column(
                 controls=[
                     check_box_list_components,
-                    ft.Row([get_columns_button],alignment=ft.MainAxisAlignment.CENTER),
-                    ft.Row([drop_down],alignment=ft.MainAxisAlignment.CENTER),
+                    ft.Row([get_columns_button], alignment=ft.MainAxisAlignment.CENTER),
+                    ft.Row([drop_down], alignment=ft.MainAxisAlignment.CENTER),
                     ft.Row([start_analyze], alignment=ft.MainAxisAlignment.CENTER),
-                    ft.Row([processing_ring],alignment=ft.MainAxisAlignment.CENTER)
+                    ft.Row([processing_ring], alignment=ft.MainAxisAlignment.CENTER)
                 ],
                 spacing=30,
                 expand=True
             )
 
-    def _split_multiple_headers_excel(self,output_folder_path_text:ft.TextField):
-        def _generate_tmp_file(_output_folder_path_text:ft.TextField, _split_config_component:ft.Column, _processing:ProgressRingComponent):
+    def _split_multiple_headers_excel(self, output_folder_path_text: ft.TextField):
+        def _generate_tmp_file(_output_folder_path_text: ft.TextField, _split_config_component: ft.Column,
+                               _processing: ProgressRingComponent):
             """
             Generates temporary files based on the split configuration provided by the user.
 
@@ -286,16 +295,17 @@ class ExcelSplitPageV2(ToolBoxPage):
                     _processing.update_status(ProgressStatus.ERROR, str(e))
                     return None
 
-
             # Generate temporary files based on the selected split configuration from the interface
             _file_path = self.excel.file_path
             extractor = ExcelHeaderExtractor(_file_path, str(Path(_output_folder_path_text.value, 'tmp')))
             for _selected_sheet_name in split_config_dic.keys():
                 extractor.file_name = Path(self.excel.file_path).stem + f"_{_selected_sheet_name}_header_tmp.xlsx"
-                result = extractor.extract_headers(_selected_sheet_name, split_config_dic[_selected_sheet_name]['header_index'])
+                result = extractor.extract_headers(_selected_sheet_name,
+                                                   split_config_dic[_selected_sheet_name]['header_index'])
                 if not result:
                     raise RuntimeError('解析excel表头失败')
-                split_config_dic[_selected_sheet_name]['tmp_file_path'] = Path(_output_folder_path_text.value,'tmp', extractor.file_name)
+                split_config_dic[_selected_sheet_name]['tmp_file_path'] = Path(_output_folder_path_text.value, 'tmp',
+                                                                               extractor.file_name)
             # Verify that the number of generated temporary files matches the source file
             if split_config_dic:
                 # if len(split_config_dic.keys()) != len(self.excel.sheets.keys()):
@@ -305,23 +315,26 @@ class ExcelSplitPageV2(ToolBoxPage):
             else:
                 raise RuntimeError('表头解析异常')
 
-        def _split_logic(_output_folder_path_text:ft.TextField, _split_config_component:ft.Column, _processing:ProgressRingComponent):
+        def _split_logic(_output_folder_path_text: ft.TextField, _split_config_component: ft.Column,
+                         _processing: ProgressRingComponent):
             try:
                 _split_config_dic = _generate_tmp_file(output_folder_path_text, _split_config_component, _processing)
                 # Update ExcelObject meta
-                processing_ring.update_status(ProgressStatus.LOADING,'开始拆分')
+                processing_ring.update_status(ProgressStatus.LOADING, '开始拆分')
                 df_group_dic = {}
                 for _sheet_name in _split_config_dic.keys():
                     _sheet_object = self.excel.sheets.get(_sheet_name)
                     _sheet_object.columns = _split_config_dic[_sheet_name]['column_index']
-                    _sheet_object.df_data = pd.read_excel(self.excel.file_path,header=None, sheet_name=_sheet_name, skiprows=_split_config_dic[_sheet_name]['header_index'])
-                    df_group_dic[_sheet_name] = _sheet_object.df_data.groupby(_sheet_object.df_data.columns[_sheet_object.columns])
+                    _sheet_object.df_data = pd.read_excel(self.excel.file_path, header=None, sheet_name=_sheet_name,
+                                                          skiprows=_split_config_dic[_sheet_name]['header_index'])
+                    df_group_dic[_sheet_name] = _sheet_object.df_data.groupby(
+                        _sheet_object.df_data.columns[_sheet_object.columns])
                 # start split
                 result_dic = {}
                 for sheet, df_group in df_group_dic.items():
                     for k, data in df_group:
                         if k not in result_dic:
-                            result_dic[k] = {sheet:data}
+                            result_dic[k] = {sheet: data}
                         else:
                             result_dic[k][sheet] = data
 
@@ -329,7 +342,7 @@ class ExcelSplitPageV2(ToolBoxPage):
                 # Copy template file to out file
                 for k, v in result_dic.items():
                     if '/' in k:
-                        k = k.replace('/','-')
+                        k = k.replace('/', '-')
                     file_name = Path(self.excel.file_path).stem + f'_{k}.xlsx'
                     processing_ring.update_status(ProgressStatus.LOADING, f'生成文件：{file_name}')
                     out_file_path = Path(output_folder_path_text.value, file_name)
@@ -427,15 +440,19 @@ class ExcelSplitPageV2(ToolBoxPage):
                 check_box = ft.Checkbox(label=sheet_name, value=False)
                 header_rows = ft.TextField(label='请输入标题所占用的行数')
                 split_column_index = ft.TextField(label='请输入根据第几列拆分')
-                split_config_component.controls.append(ft.Row(controls=[check_box, header_rows,split_column_index],alignment=ft.MainAxisAlignment.CENTER,expand=True))
+                split_config_component.controls.append(
+                    ft.Row(controls=[check_box, header_rows, split_column_index], alignment=ft.MainAxisAlignment.CENTER,
+                           expand=True))
 
-            button = ft.ElevatedButton(text='开始拆分', on_click=lambda _:_split_logic(output_folder_path_text,split_config_component,processing_ring))
-
+            button = ft.ElevatedButton(text='开始拆分',
+                                       on_click=lambda _: _split_logic(output_folder_path_text, split_config_component,
+                                                                       processing_ring))
 
             return ft.Container(
                 content=ft.Column(
                     controls=[
-                        ft.Row(controls=[ft.Text("-------------配置拆分规则-------------")], alignment=ft.MainAxisAlignment.CENTER),
+                        ft.Row(controls=[ft.Text("-------------配置拆分规则-------------")],
+                               alignment=ft.MainAxisAlignment.CENTER),
                         split_config_component,
                         ft.Row([button], alignment=ft.MainAxisAlignment.CENTER),
                         ft.Row([processing_ring], alignment=ft.MainAxisAlignment.CENTER),
@@ -444,7 +461,7 @@ class ExcelSplitPageV2(ToolBoxPage):
                 margin=ft.Margin(left=0, top=20, right=0, bottom=0)
             )
 
-    def _simple_split_excel(self, output_folder_path_text:ft.TextField):
+    def _simple_split_excel(self, output_folder_path_text: ft.TextField):
 
         def redio_on_change(mode: ft.RadioGroup, button: ft.ElevatedButton, sheet_dropdown: ft.Dropdown,
                             columns_dropdown: ft.Dropdown):
@@ -480,12 +497,12 @@ class ExcelSplitPageV2(ToolBoxPage):
             self.page.update()
 
         def business_logic(
-                           mode: ft.RadioGroup,
-                           sheet_selector: ft.Dropdown,
-                           columns_selector: ft.Dropdown,
-                           folder_path_text: ft.TextField,
-                           progress: ProgressRingComponent
-                           ):
+                mode: ft.RadioGroup,
+                sheet_selector: ft.Dropdown,
+                columns_selector: ft.Dropdown,
+                folder_path_text: ft.TextField,
+                progress: ProgressRingComponent
+        ):
             try:
                 if self.excel is None:
                     raise RuntimeError('未提供待拆分文件或输出文件夹')
@@ -564,14 +581,14 @@ class ExcelSplitPageV2(ToolBoxPage):
             spacing=30,
         )
 
-
     def gui(self):
         # 文件选择器组件
         file_path_text = ft.TextField(label='请选择需拆分文件(.xlsx)', expand=True)
-        file_picker = ft.FilePicker(on_result=lambda e:self._picker(e,file_path_text))
+        file_picker = ft.FilePicker(on_result=lambda e: self._picker(e, file_path_text))
         analyze_process_ring = ProgressRingComponent()
         analyze_button = ft.ElevatedButton(text='解析后拆分',
-                                           on_click=lambda _: self._load_excel_file(file_path_text, analyze_process_ring, tab_page))
+                                           on_click=lambda _: self._load_excel_file(file_path_text,
+                                                                                    analyze_process_ring, tab_page))
         # 输出文件夹选择器
         folder_picker = ft.FilePicker(on_result=lambda e: self._picker(e, folder_path_text, is_file=False))
         folder_path_text = ft.TextField(label='请选择输出文件夹', read_only=True, expand=True)
@@ -592,11 +609,12 @@ class ExcelSplitPageV2(ToolBoxPage):
                 expand=True
             ),
             self.checkBox,
-            ft.Row(controls=[analyze_button,analyze_process_ring],alignment=ft.MainAxisAlignment.CENTER,expand=True)
+            ft.Row(controls=[analyze_button, analyze_process_ring], alignment=ft.MainAxisAlignment.CENTER, expand=True)
         ])
         self.page.overlay.extend([file_picker, folder_picker])
+
         # 在二级Tab变更时更新二级Tab界面
-        def on_excel_tab_change(_e, _output_folder_path_text:ft.TextField, _tabs:ft.Tabs):
+        def on_excel_tab_change(_e, _output_folder_path_text: ft.TextField, _tabs: ft.Tabs):
             if _e.control.selected_index == 1:
                 _tabs.tabs[1].content = self._split_multiple_headers_excel(_output_folder_path_text)
                 _tabs.update()
@@ -604,17 +622,17 @@ class ExcelSplitPageV2(ToolBoxPage):
             pass
 
         excel_tab = ft.Tabs(
-            on_change= lambda e: on_excel_tab_change(e, folder_path_text, excel_tab),
+            on_change=lambda e: on_excel_tab_change(e, folder_path_text, excel_tab),
             selected_index=0,
             animation_duration=300,
             tabs=[
-              ft.Tab(
-                  text='无合并单元格单一表头拆分',
-                  content=ft.Container(
-                      content=ft.Container(),
-                      padding=ft.padding.only(top=20),
-                  ),
-              ),
+                ft.Tab(
+                    text='无合并单元格单一表头拆分',
+                    content=ft.Container(
+                        content=ft.Container(),
+                        padding=ft.padding.only(top=20),
+                    ),
+                ),
                 ft.Tab(
                     text='复杂表头拆分',
                     content=ft.Container(
@@ -626,8 +644,8 @@ class ExcelSplitPageV2(ToolBoxPage):
         )
 
         tab_page = ft.Tabs(
-            visible= False,
-            on_change= lambda e:self._tab_change(e,folder_path_text, excel_tab),
+            visible=False,
+            on_change=lambda e: self._tab_change(e, folder_path_text, excel_tab),
             selected_index=0,
             animation_duration=300,
             tabs=[
@@ -652,9 +670,5 @@ class ExcelSplitPageV2(ToolBoxPage):
                 excel_components,
                 tab_page
             ],
-            spacing = 25,
+            spacing=25,
         )
-
-
-
-
