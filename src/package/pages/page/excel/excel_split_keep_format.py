@@ -16,13 +16,15 @@ class ExcelSplitKM:
             self.split_sub_model: str = ""
             self.split_config: list[dict[str, Any]] = []
 
-    @classmethod
-    def split_keep_format(cls, excel: ExcelSplitPageV2.ExcelObject, excel_split_config: ExcelSplitConfig,
-                          output_folder_path: str):
+    def __init__(self, progress: ProgressRingComponent):
+        self.progress: ProgressRingComponent = progress
+
+    def split_keep_format(self, excel: ExcelSplitPageV2.ExcelObject, excel_split_config: ExcelSplitConfig,
+                          output_folder_path: str) -> bool:
         # model-0:simply split model-1:split_multiple_headers
         if excel_split_config.split_model == 0:
             if excel_split_config.split_sub_model == 'sheet':
-                pass
+                return self._split_file_by_sheet(excel, output_folder_path)
             elif excel_split_config.split_sub_model == 'col':
                 pass
             pass
@@ -34,6 +36,38 @@ class ExcelSplitKM:
             pass
 
         pass
+
+    def _split_file_by_sheet(self, excel: ExcelSplitPageV2.ExcelObject, output_folder_path: str) -> bool:
+        try:
+            from openpyxl import load_workbook, Workbook
+
+            self.progress.update_status(ProgressStatus.LOADING, '开始按Sheet拆分并保持格式')
+            original_wb = load_workbook(excel.file_path)
+            file_name = Path(excel.file_path).stem
+            for sheet_name in excel.sheets.keys():
+                self.progress.update_status(ProgressStatus.LOADING, f'生成格式化文件: {sheet_name}')
+
+                # Create new workbook with single sheet
+                new_wb = Workbook()
+                new_ws = new_wb.active
+                new_ws.title = sheet_name
+
+                # Copy the original sheet content and formatting
+                original_ws = original_wb[sheet_name]
+                _copy_worksheet_complete(original_ws, new_ws)
+
+                # Save the new file
+                output_file = Path(output_folder_path, f"{file_name}_{sheet_name}.xlsx")
+                new_wb.save(output_file)
+                new_wb.close()
+
+            original_wb.close()
+            self.progress.update_status(ProgressStatus.SUCCESS, '按Sheet格式保持拆分完成')
+            return True
+
+        except Exception as e:
+            self.progress.update_status(ProgressStatus.ERROR, f'按Sheet格式保持拆分失败: {str(e)}')
+            return False
 
     def _split_with_format_preserved(excel: ExcelSplitPageV2.ExcelObject, output_folder_path_text: ft.TextField,
                                      sheet_name: str, column_name: str,
@@ -169,52 +203,6 @@ def _copy_cell_format(self, source_cell, target_cell):
         target_cell.alignment = source_cell.alignment.copy()
         # Copy protection
         target_cell.protection = source_cell.protection.copy()
-
-
-def _split_sheets_with_format_preserved(self, output_folder_path_text: ft.TextField, progress: ProgressRingComponent):
-    """
-    Split Excel file by sheets while preserving original formatting.
-
-    This method creates separate Excel files for each sheet while maintaining
-    all the original formatting.
-
-    Args:
-        output_folder_path_text (ft.TextField): Text field containing output folder path
-        progress (ProgressRingComponent): Progress indicator component
-    """
-    try:
-        from openpyxl import load_workbook, Workbook
-
-        progress.update_status(ProgressStatus.LOADING, '开始按Sheet拆分并保持格式')
-
-        original_wb = load_workbook(excel.file_path)
-        file_name = Path(excel.file_path).stem
-
-        for sheet_name in excel.sheets.keys():
-            progress.update_status(ProgressStatus.LOADING, f'生成格式化文件: {sheet_name}')
-
-            # Create new workbook with single sheet
-            new_wb = Workbook()
-            new_ws = new_wb.active
-            new_ws.title = sheet_name
-
-            # Copy the original sheet content and formatting
-            original_ws = original_wb[sheet_name]
-            _copy_worksheet_complete(original_ws, new_ws)
-
-            # Save the new file
-            output_file = Path(output_folder_path_text.value, f"{file_name}_{sheet_name}.xlsx")
-            new_wb.save(output_file)
-            new_wb.close()
-
-        original_wb.close()
-        progress.update_status(ProgressStatus.SUCCESS, '按Sheet格式保持拆分完成')
-
-        if checkBox.value:
-            open_folder_in_explorer(output_folder_path_text.value)
-
-    except Exception as e:
-        progress.update_status(ProgressStatus.ERROR, f'按Sheet格式保持拆分失败: {str(e)}')
 
 
 def _copy_worksheet_complete(self, source_ws, target_ws):
