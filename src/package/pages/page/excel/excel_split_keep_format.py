@@ -1,51 +1,74 @@
+import shutil
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, Optional, Callable
 
-import flet as ft
-from openpyxl import load_workbook
+import pandas as pd
 
 from .excel_split_v2 import ExcelSplitPageV2
-from ....components.progress_ring_components import ProgressRingComponent
-from ....enums.progress_status_enums import ProgressStatus
+
+
+class ExcelSplitConfig:
+    def __init__(self):
+        self.split_model: int = 0
+        self.split_sub_model: str = ""
+        self.split_config: list[dict[str, Any]] = []
 
 
 class ExcelSplitKM:
-    class ExcelSplitConfig:
-        def __init__(self):
-            self.split_model: int = 0
-            self.split_sub_model: str = ""
-            self.split_config: list[dict[str, Any]] = []
 
-    def __init__(self, progress: ProgressRingComponent):
-        self.progress: ProgressRingComponent = progress
+    def __init__(self, progress_callback: Optional[Callable[[str, str], None]] = None):
+        """
+        初始化Excel拆分处理器
+
+        Args:
+            progress_callback: 进度回调函数，接收(status, message)参数
+        """
+        self.progress_callback = progress_callback
+
+    def _update_progress(self, status: str, message: str):
+        """更新进度"""
+        if self.progress_callback:
+            self.progress_callback(status, message)
 
     def split_keep_format(self, excel: ExcelSplitPageV2.ExcelObject, excel_split_config: ExcelSplitConfig,
                           output_folder_path: str) -> bool:
-        # model-0:simply split model-1:split_multiple_headers
+        """
+        根据配置拆分Excel文件并保持格式
+
+        Args:
+            excel: Excel对象
+            excel_split_config: 拆分配置
+            output_folder_path: 输出文件夹路径
+
+        Returns:
+            bool: 拆分是否成功
+        """
+        # model-0: 简单拆分  model-1: 多表头拆分
         if excel_split_config.split_model == 0:
             if excel_split_config.split_sub_model == 'sheet':
                 return self._split_file_by_sheet(excel, output_folder_path)
             elif excel_split_config.split_sub_model == 'col':
-                pass
-            pass
+                # 需要传入拆分列信息
+                if excel_split_config.split_config:
+                    split_column = excel_split_config.split_config[0].get('split_column', '')
+                    return self._split_file_by_col(excel, output_folder_path, split_column)
         elif excel_split_config.split_model == 1:
-            if excel_split_config.split_sub_model == 'single':
-                pass
-            elif excel_split_config.split_sub_model == 'multiple':
-                pass
-            pass
+            if excel_split_config.split_sub_model == 'multiple':
+                return self._split_multiple_headers_excel(excel, output_folder_path, excel_split_config.split_config)
 
-        pass
+        return False
 
     def _split_file_by_sheet(self, excel: ExcelSplitPageV2.ExcelObject, output_folder_path: str) -> bool:
+        """按工作表拆分Excel文件"""
         try:
             from openpyxl import load_workbook, Workbook
 
-            self.progress.update_status(ProgressStatus.LOADING, '开始按Sheet拆分并保持格式')
+            self._update_progress('loading', '开始按Sheet拆分并保持格式')
             original_wb = load_workbook(excel.file_path)
             file_name = Path(excel.file_path).stem
+
             for sheet_name in excel.sheets.keys():
-                self.progress.update_status(ProgressStatus.LOADING, f'生成格式化文件: {sheet_name}')
+                self._update_progress('loading', f'生成格式化文件: {sheet_name}')
 
                 # Create new workbook with single sheet
                 new_wb = Workbook()
@@ -54,7 +77,7 @@ class ExcelSplitKM:
 
                 # Copy the original sheet content and formatting
                 original_ws = original_wb[sheet_name]
-                _copy_worksheet_complete(original_ws, new_ws)
+                self._copy_worksheet_complete(original_ws, new_ws)
 
                 # Save the new file
                 output_file = Path(output_folder_path, f"{file_name}_{sheet_name}.xlsx")
@@ -62,309 +85,431 @@ class ExcelSplitKM:
                 new_wb.close()
 
             original_wb.close()
-            self.progress.update_status(ProgressStatus.SUCCESS, '按Sheet格式保持拆分完成')
+            self._update_progress('success', '按Sheet格式保持拆分完成')
             return True
 
         except Exception as e:
-            self.progress.update_status(ProgressStatus.ERROR, f'按Sheet格式保持拆分失败: {str(e)}')
+            self._update_progress('error', f'按Sheet格式保持拆分失败: {str(e)}')
             return False
 
-    def _split_with_format_preserved(excel: ExcelSplitPageV2.ExcelObject, output_folder_path_text: ft.TextField,
-                                     sheet_name: str, column_name: str,
-                                     progress: ProgressRingComponent):
-        """
-        Split Excel file while preserving original formatting using openpyxl.
-
-        This method creates separate Excel files for each unique value in the specified column
-        while maintaining all the original formatting including fonts, colors, borders,
-        column widths, row heights, and merged cells.
-
-        Args:
-            output_folder_path_text (ft.TextField): Text field containing output folder path
-            sheet_name (str): Name of the sheet to split
-            column_name (str): Name of the column to group by for splitting
-            progress (ProgressRingComponent): Progress indicator component
-        """
+    def _split_file_by_col(self, excel: ExcelSplitPageV2.ExcelObject,
+                           output_folder_path: str, split_column: str) -> bool:
+        """按指定列的值拆分Excel文件"""
         try:
+            from openpyxl import load_workbook, Workbook
 
-            progress.update_status(ProgressStatus.LOADING, '开始格式保持拆分')
-
-            # Load the original workbook with openpyxl to preserve formatting
+            self._update_progress('loading', '开始按列拆分并保持格式')
             original_wb = load_workbook(excel.file_path)
-            original_ws = original_wb[sheet_name]
-
-            # Get the data for splitting
-            df = excel.sheets[sheet_name].df_data
             file_name = Path(excel.file_path).stem
 
-            # Find the column index for the split column
-            split_column_idx = None
-            for idx, col in enumerate(df.columns):
-                if col == column_name:
-                    split_column_idx = idx + 1  # openpyxl uses 1-based indexing
-                    break
+            for sheet_name, sheet_data in excel.sheets.items():
+                original_ws = original_wb[sheet_name]
 
-            if split_column_idx is None:
-                raise ValueError(f"Column '{column_name}' not found in sheet '{sheet_name}'")
+                # 找到分割列的索引
+                split_col_idx = None
+                for idx, col in enumerate(sheet_data['headers']):
+                    if col == split_column:
+                        split_col_idx = idx + 1  # openpyxl uses 1-based indexing
+                        break
 
-            # Group the data by the specified column
-            grouped = df.groupby(column_name)
+                if split_col_idx is None:
+                    continue
 
-            for group_value, group_data in grouped:
-                progress.update_status(ProgressStatus.LOADING, f'生成格式化文件: {group_value}')
+                # 获取该列的所有唯一值
+                unique_values = set()
+                for row in original_ws.iter_rows(min_row=2, min_col=split_col_idx, max_col=split_col_idx):
+                    if row[0].value:
+                        unique_values.add(str(row[0].value))
 
-                # Create a new workbook by copying the original
-                new_wb = load_workbook(excel.file_path)
-                new_ws = new_wb[sheet_name]
+                # 为每个唯一值创建新文件
+                for value in unique_values:
+                    self._update_progress('loading', f'生成文件: {sheet_name}_{value}')
 
-                # Clear existing data while keeping formatting structure
-                _clear_worksheet_data(new_ws)
+                    new_wb = Workbook()
+                    new_ws = new_wb.active
+                    new_ws.title = sheet_name
 
-                # Insert new data while preserving formatting
-                _insert_data_with_format(new_ws, group_data, original_ws)
+                    # 复制表头
+                    self._copy_header_row(original_ws, new_ws)
 
-                # Save the new file
-                output_file = Path(output_folder_path_text.value, f"{file_name}_{group_value}.xlsx")
-                new_wb.save(output_file)
-                new_wb.close()
+                    # 复制符合条件的数据行
+                    self._copy_filtered_rows(original_ws, new_ws, split_col_idx, value)
+
+                    # 保存文件
+                    safe_value = "".join(c for c in value if c.isalnum() or c in (' ', '-', '_')).rstrip()
+                    output_file = Path(output_folder_path, f"{file_name}_{sheet_name}_{safe_value}.xlsx")
+                    new_wb.save(output_file)
+                    new_wb.close()
 
             original_wb.close()
-            progress.update_status(ProgressStatus.SUCCESS, '格式保持拆分完成')
-
-            if checkBox.value:
-                open_folder_in_explorer(output_folder_path_text.value)
+            self._update_progress('success', '按列格式保持拆分完成')
+            return True
 
         except Exception as e:
-            progress.update_status(ProgressStatus.ERROR, f'格式保持拆分失败: {str(e)}')
+            self._update_progress('error', f'按列格式保持拆分失败: {str(e)}')
+            return False
 
+    def _split_multiple_headers_excel(self, excel: ExcelSplitPageV2.ExcelObject,
+                                      output_folder_path: str,
+                                      split_config: list[dict[str, Any]]) -> bool:
+        """
+        根据多表头配置拆分Excel文件
 
-def _clear_worksheet_data(self, worksheet):
-    """
-    Clear data from worksheet while preserving formatting structure.
+        Args:
+            excel: Excel对象
+            output_folder_path: 输出文件夹路径
+            split_config: 拆分配置列表，每个配置包含:
+                - sheet_name: 工作表名称
+                - header_rows: 表头行数
+                - split_column_index: 拆分列索引(0-based)
 
-    Args:
-        worksheet: openpyxl worksheet object
-    """
-    # Find the data range (skip header row if exists)
-    max_row = worksheet.max_row
-    max_col = worksheet.max_column
+        Returns:
+            bool: 拆分是否成功
+        """
+        temp_folder = None
+        try:
+            # 生成模板文件配置
+            split_config_dic = self._generate_template_config(excel, output_folder_path, split_config)
+            if not split_config_dic:
+                return False
 
-    # Clear data starting from row 2 (assuming row 1 is header)
-    for row in range(2, max_row + 1):
-        for col in range(1, max_col + 1):
-            cell = worksheet.cell(row=row, column=col)
-            cell.value = None
+            temp_folder = Path(output_folder_path, 'tmp')
 
+            self._update_progress('loading', '开始分析数据')
 
-def _insert_data_with_format(self, worksheet, dataframe, original_worksheet):
-    """
-    Insert dataframe data into worksheet while preserving original formatting.
+            # 读取和分组数据
+            df_group_dic = {}
+            for sheet_name, config in split_config_dic.items():
+                sheet_object = excel.sheets.get(sheet_name)
 
-    Args:
-        worksheet: Target openpyxl worksheet
-        dataframe: pandas DataFrame containing the data to insert
-        original_worksheet: Original worksheet for format reference
-    """
-    from openpyxl.utils.dataframe import dataframe_to_rows
+                # 读取数据（跳过表头行）
+                df_data = pd.read_excel(
+                    excel.file_path,
+                    header=None,
+                    sheet_name=sheet_name,
+                    skiprows=config['header_rows']
+                )
 
-    # Insert data starting from row 2 (assuming row 1 is header)
-    start_row = 2
+                # 按指定列分组
+                df_group_dic[sheet_name] = df_data.groupby(
+                    df_data.columns[config['split_column_index']]
+                )
 
-    for r_idx, row in enumerate(dataframe_to_rows(dataframe, index=False, header=False)):
-        for c_idx, value in enumerate(row):
-            target_cell = worksheet.cell(row=start_row + r_idx, column=c_idx + 1)
-            target_cell.value = value
+            # 重新组织数据结构
+            result_dic = {}
+            for sheet, df_group in df_group_dic.items():
+                for group_key, data in df_group:
+                    if group_key not in result_dic:
+                        result_dic[group_key] = {sheet: data}
+                    else:
+                        result_dic[group_key][sheet] = data
 
-            # Copy formatting from original if within bounds
-            original_row = start_row + r_idx
-            if original_row <= original_worksheet.max_row:
-                original_cell = original_worksheet.cell(row=original_row, column=c_idx + 1)
-                _copy_cell_format(original_cell, target_cell)
+            self._update_progress('loading', '开始生成文件')
 
+            # 生成最终文件
+            total_files = len(result_dic)
+            current_file = 0
 
-def _copy_cell_format(self, source_cell, target_cell):
-    """
-    Copy formatting from source cell to target cell.
+            for group_key, sheets_data in result_dic.items():
+                current_file += 1
 
-    Args:
-        source_cell: Source openpyxl cell
-        target_cell: Target openpyxl cell
-    """
-    if source_cell.has_style:
-        # Copy font
-        target_cell.font = source_cell.font.copy()
-        # Copy border
-        target_cell.border = source_cell.border.copy()
-        # Copy fill
-        target_cell.fill = source_cell.fill.copy()
-        # Copy number format
-        target_cell.number_format = source_cell.number_format
-        # Copy alignment
-        target_cell.alignment = source_cell.alignment.copy()
-        # Copy protection
-        target_cell.protection = source_cell.protection.copy()
+                # 处理文件名中的特殊字符
+                safe_key = str(group_key).replace('/', '-').replace('\\', '-').replace(':', '-')
+                file_name = f"{Path(excel.file_path).stem}_{safe_key}.xlsx"
 
+                self._update_progress('loading', f'生成文件 ({current_file}/{total_files}): {file_name}')
 
-def _copy_worksheet_complete(self, source_ws, target_ws):
-    """
-    Complete copy of worksheet including data, formatting, and structure.
+                output_file_path = Path(output_folder_path, file_name)
 
-    Args:
-        source_ws: Source openpyxl worksheet
-        target_ws: Target openpyxl worksheet
-    """
-    # Copy cell data and formatting
-    for row in source_ws.iter_rows():
-        for cell in row:
-            target_cell = target_ws.cell(row=cell.row, column=cell.column)
+                # 处理多个sheet的情况
+                if len(sheets_data) == 1:
+                    # 只有一个sheet，直接使用模板
+                    sheet_name = list(sheets_data.keys())[0]
+                    template_path = split_config_dic[sheet_name]['template_file_path']
+                    data_df = sheets_data[sheet_name]
+                    header_rows = split_config_dic[sheet_name]['header_rows']
+
+                    self._write_data_with_format(template_path, data_df, sheet_name, header_rows, output_file_path)
+
+                else:
+                    # 多个sheet，需要合并到一个文件
+                    self._create_multi_sheet_file(sheets_data, split_config_dic, output_file_path)
+
+            self._update_progress('success', f'拆分完成，共生成 {total_files} 个文件')
+            return True
+
+        except Exception as e:
+            self._update_progress('error', f'拆分失败: {str(e)}')
+            return False
+
+        finally:
+            # 清理临时文件
+            if temp_folder and temp_folder.exists():
+                try:
+                    shutil.rmtree(temp_folder)
+                except Exception as e:
+                    print(f"清理临时文件失败: {e}")
+
+    def _generate_template_config(self, excel: ExcelSplitPageV2.ExcelObject,
+                                  output_folder_path: str,
+                                  split_config: list[dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """
+        生成基于用户分割配置的模板文件配置
+
+        Args:
+            excel: Excel对象
+            output_folder_path: 输出文件夹路径
+            split_config: 拆分配置列表
+
+        Returns:
+            dict: 包含每个选中sheet配置信息的字典，包括模板文件路径
+        """
+        self._update_progress('loading', '开始拆分前准备')
+
+        split_config_dic = {}
+
+        # 解析用户配置
+        for config in split_config:
+            try:
+                sheet_name = config['sheet_name']
+                header_rows = int(config['header_rows'])
+                split_column_index = int(config['split_column_index'])
+
+                split_config_dic[sheet_name] = {
+                    "header_rows": header_rows,
+                    "split_column_index": split_column_index
+                }
+            except (ValueError, KeyError) as e:
+                self._update_progress('error', f"配置错误: {str(e)}")
+                return None
+
+        if not split_config_dic:
+            self._update_progress('error', "请至少选择一个Sheet进行拆分")
+            return None
+
+        # 创建临时文件夹
+        tmp_folder = Path(output_folder_path, 'tmp')
+        tmp_folder.mkdir(parents=True, exist_ok=True)
+
+        # 为每个选中的sheet创建带完整格式的模板文件
+        from openpyxl import load_workbook, Workbook
+
+        try:
+            source_wb = load_workbook(excel.file_path)
+
+            for selected_sheet_name in split_config_dic.keys():
+                self._update_progress('loading', f'准备模板: {selected_sheet_name}')
+
+                # 创建新的工作簿作为模板
+                template_wb = Workbook()
+                template_ws = template_wb.active
+                template_ws.title = selected_sheet_name
+
+                source_ws = source_wb[selected_sheet_name]
+
+                # 复制表头部分（包含完整格式）
+                header_rows = split_config_dic[selected_sheet_name]['header_rows']
+                self._copy_header_with_format(source_ws, template_ws, header_rows)
+
+                # 保存模板文件
+                template_file_name = f"{Path(excel.file_path).stem}_{selected_sheet_name}_template.xlsx"
+                template_file_path = tmp_folder / template_file_name
+                template_wb.save(template_file_path)
+                template_wb.close()
+
+                split_config_dic[selected_sheet_name]['template_file_path'] = template_file_path
+
+            source_wb.close()
+            self._update_progress('loading', '模板准备完成')
+            return split_config_dic
+
+        except Exception as e:
+            self._update_progress('error', f'模板生成失败: {str(e)}')
+            return None
+
+    def _create_multi_sheet_file(self, sheets_data: Dict[str, pd.DataFrame],
+                                 split_config_dic: Dict[str, Any],
+                                 output_file_path: Path):
+        """创建包含多个工作表的文件"""
+        from openpyxl import Workbook, load_workbook
+
+        final_wb = Workbook()
+        final_wb.remove(final_wb.active)  # 移除默认sheet
+
+        for sheet_name, data_df in sheets_data.items():
+            template_path = split_config_dic[sheet_name]['template_file_path']
+            header_rows = split_config_dic[sheet_name]['header_rows']
+
+            # 加载模板
+            template_wb = load_workbook(template_path)
+            template_ws = template_wb[sheet_name]
+
+            # 在最终工作簿中创建新sheet
+            final_ws = final_wb.create_sheet(sheet_name)
+
+            # 复制模板格式
+            self._copy_worksheet_complete(template_ws, final_ws)
+
+            # 写入数据
+            start_row = header_rows + 1
+            for row_idx, (_, row_data) in enumerate(data_df.iterrows(), start=start_row):
+                for col_idx, value in enumerate(row_data, start=1):
+                    cell = final_ws.cell(row=row_idx, column=col_idx)
+                    cell.value = value
+
+            template_wb.close()
+
+        # 保存最终文件
+        final_wb.save(output_file_path)
+        final_wb.close()
+
+    def _copy_header_row(self, source_ws, target_ws):
+        """复制表头行"""
+        for cell in source_ws[1]:
+            target_cell = target_ws.cell(row=1, column=cell.column)
             target_cell.value = cell.value
-
-            # Copy all formatting
             if cell.has_style:
                 target_cell.font = cell.font.copy()
                 target_cell.border = cell.border.copy()
                 target_cell.fill = cell.fill.copy()
-                target_cell.number_format = cell.number_format
-                target_cell.protection = cell.protection.copy()
                 target_cell.alignment = cell.alignment.copy()
 
-    # Copy column dimensions
-    for col in source_ws.column_dimensions:
-        target_ws.column_dimensions[col].width = source_ws.column_dimensions[col].width
+    def _copy_filtered_rows(self, source_ws, target_ws, filter_col_idx, filter_value):
+        """复制符合条件的数据行"""
+        target_row = 2
+        for row in source_ws.iter_rows(min_row=2):
+            if str(row[filter_col_idx - 1].value) == filter_value:
+                for cell in row:
+                    target_cell = target_ws.cell(row=target_row, column=cell.column)
+                    target_cell.value = cell.value
+                    if cell.has_style:
+                        target_cell.font = cell.font.copy()
+                        target_cell.border = cell.border.copy()
+                        target_cell.fill = cell.fill.copy()
+                        target_cell.alignment = cell.alignment.copy()
+                target_row += 1
 
-    # Copy row dimensions
-    for row in source_ws.row_dimensions:
-        target_ws.row_dimensions[row].height = source_ws.row_dimensions[row].height
+    def _copy_worksheet_complete(self, source_ws, target_ws):
+        """
+        完整复制工作表包括数据、格式和结构
 
-    # Copy merged cells
-    for merged_range in source_ws.merged_cells.ranges:
-        target_ws.merge_cells(str(merged_range))
+        Args:
+            source_ws: 源openpyxl工作表
+            target_ws: 目标openpyxl工作表
+        """
+        # 复制单元格数据和格式
+        for row in source_ws.iter_rows():
+            for cell in row:
+                target_cell = target_ws.cell(row=cell.row, column=cell.column)
+                target_cell.value = cell.value
 
-    # Copy sheet properties
-    if hasattr(source_ws, 'sheet_properties') and hasattr(target_ws, 'sheet_properties'):
-        target_ws.sheet_properties.tabColor = source_ws.sheet_properties.tabColor
+                # 复制所有格式
+                if cell.has_style:
+                    target_cell.font = cell.font.copy()
+                    target_cell.border = cell.border.copy()
+                    target_cell.fill = cell.fill.copy()
+                    target_cell.number_format = cell.number_format
+                    target_cell.protection = cell.protection.copy()
+                    target_cell.alignment = cell.alignment.copy()
 
+        # 复制列宽
+        for col in source_ws.column_dimensions:
+            target_ws.column_dimensions[col].width = source_ws.column_dimensions[col].width
 
-def _format_preserved_simple_split_excel(self, output_folder_path_text: ft.TextField):
-    """
-    Enhanced simple split function with format preservation option.
+        # 复制行高
+        for row in source_ws.row_dimensions:
+            target_ws.row_dimensions[row].height = source_ws.row_dimensions[row].height
 
-    Args:
-        output_folder_path_text (ft.TextField): Output folder path text field
+        # 复制合并单元格
+        for merged_range in source_ws.merged_cells.ranges:
+            target_ws.merge_cells(str(merged_range))
 
-    Returns:
-        ft.Column: UI column component for format-preserved splitting
-    """
+        # 复制工作表属性
+        if hasattr(source_ws, 'sheet_properties') and hasattr(target_ws, 'sheet_properties'):
+            target_ws.sheet_properties.tabColor = source_ws.sheet_properties.tabColor
 
-    def redio_on_change(mode: ft.RadioGroup, button: ft.ElevatedButton, sheet_dropdown: ft.Dropdown,
-                        columns_dropdown: ft.Dropdown):
-        if mode.value == '0':
-            sheet_dropdown.value = None
-            columns_dropdown.value = None
-            sheet_dropdown.options = []
-            columns_dropdown.options = []
-            sheet_dropdown.disabled = True
-            columns_dropdown.disabled = True
-            button.disabled = False  # Sheet splitting doesn't need column selection
-            sheet_dropdown.update()
-            columns_dropdown.update()
-            page.update()
-        else:
-            if excel:
-                sheet_dropdown.options = []
-                sheet_dropdown.options = [ft.DropdownOption(value) for value in excel.sheets.keys()]
-                sheet_dropdown.disabled = False
-                columns_dropdown.disabled = False
-                button.disabled = True  # Will be enabled after selections
-                sheet_dropdown.update()
-                page.update()
+    def _copy_header_with_format(self, source_ws, target_ws, header_rows):
+        """
+        复制表头行，包含完整的格式信息
 
-    def sheet_dropdown_changed(selector: ft.Dropdown, columns_selector: ft.Dropdown, button: ft.ElevatedButton):
-        if columns_selector.value is not None:
-            columns_selector.value = None
-            columns_selector.visible = False
-            sleep(0.01)
-            columns_selector.visible = True
-        columns_selector.options = [ft.DropdownOption(value) for value in excel.sheets[selector.value].columns]
-        columns_selector.update()
-        button.disabled = False
-        page.update()
+        Args:
+            source_ws: 源工作表
+            target_ws: 目标工作表
+            header_rows: 表头行数
+        """
+        # 复制表头行的数据和格式
+        for row_idx in range(1, header_rows + 1):
+            for cell in source_ws[row_idx]:
+                target_cell = target_ws.cell(row=cell.row, column=cell.column)
+                target_cell.value = cell.value
 
-    def format_preserved_business_logic(
-            mode: ft.RadioGroup,
-            sheet_selector: ft.Dropdown,
-            columns_selector: ft.Dropdown,
-            folder_path_text: ft.TextField,
-            progress: ProgressRingComponent
-    ):
-        try:
-            if excel is None:
-                raise RuntimeError('未提供待拆分文件或输出文件夹')
+                # 复制完整格式
+                if cell.has_style:
+                    target_cell.font = cell.font.copy()
+                    target_cell.border = cell.border.copy()
+                    target_cell.fill = cell.fill.copy()
+                    target_cell.number_format = cell.number_format
+                    target_cell.protection = cell.protection.copy()
+                    target_cell.alignment = cell.alignment.copy()
 
-            # 根据列拆分（保持格式）
-            if mode.value == '1':
-                _split_with_format_preserved(
-                    folder_path_text,
-                    sheet_selector.value,
-                    columns_selector.value,
-                    progress
-                )
-            # 根据Sheet拆分（保持格式）
-            elif mode.value == '0':
-                _split_sheets_with_format_preserved(folder_path_text, progress)
+        # 复制列宽
+        for col in source_ws.column_dimensions:
+            if source_ws.column_dimensions[col].width:
+                target_ws.column_dimensions[col].width = source_ws.column_dimensions[col].width
 
-        except Exception as e:
-            progress.update_status(ProgressStatus.ERROR, str(e))
+        # 复制表头区域的行高
+        for row_idx in range(1, header_rows + 1):
+            if row_idx in source_ws.row_dimensions:
+                target_ws.row_dimensions[row_idx].height = source_ws.row_dimensions[row_idx].height
 
-    # GUI Components
-    sheet_selector = ft.Dropdown(
-        label='请选择Sheet页',
-        on_change=lambda _: sheet_dropdown_changed(sheet_selector, columns_selector, split_button),
-        options=[],
-        width=200,
-        disabled=disable,
-    )
+        # 复制表头区域的合并单元格
+        for merged_range in source_ws.merged_cells.ranges:
+            # 只复制在表头范围内的合并单元格
+            if merged_range.min_row <= header_rows:
+                target_ws.merge_cells(str(merged_range))
 
-    columns_selector = ft.Dropdown(
-        label='请选择拆分列',
-        options=[],
-        width=300,
-        disabled=disable,
-    )
+    def _write_data_with_format(self, template_file_path, data_df, sheet_name, header_rows, output_path):
+        """
+        将数据写入模板文件并保持格式
 
-    # Split mode selection
-    mode = ft.RadioGroup(
-        ft.Row(
-            [
-                ft.Radio(value="0", label="根据Sheet拆分（保持格式）"),
-                ft.Radio(value="1", label="根据列拆分（保持格式）"),
-            ]
-        ),
-        value="0",
-        on_change=lambda _: redio_on_change(mode, None, sheet_selector, columns_selector)
-    )
+        Args:
+            template_file_path: 模板文件路径
+            data_df: 要写入的数据DataFrame
+            sheet_name: 工作表名称
+            header_rows: 表头行数
+            output_path: 输出文件路径
+        """
+        from openpyxl import load_workbook
 
-    # Progress indicator
-    handel_progress = ProgressRingComponent()
+        # 复制模板到输出位置
+        shutil.copy2(template_file_path, output_path)
 
-    # Split button
-    split_button = ft.ElevatedButton(
-        text='开始格式保持拆分',
-        on_click=lambda _: format_preserved_business_logic(
-            mode,
-            sheet_selector,
-            columns_selector,
-            output_folder_path_text,
-            handel_progress
-        )
-    )
+        # 打开文件并写入数据
+        wb = load_workbook(output_path)
+        ws = wb[sheet_name]
 
-    return ft.Column(
-        controls=[
-            ft.Row([ft.Text('选择格式保持拆分模式:'), mode], spacing=15),
-            ft.Row([sheet_selector, columns_selector], alignment=ft.MainAxisAlignment.CENTER, expand=True),
-            ft.Row([split_button], alignment=ft.MainAxisAlignment.CENTER, expand=True),
-            handel_progress
-        ],
-        spacing=30,
-    )
+        # 从表头行之后开始写入数据
+        start_row = header_rows + 1
+
+        # 逐行写入数据，保持原有格式
+        for row_idx, (_, row_data) in enumerate(data_df.iterrows(), start=start_row):
+            for col_idx, value in enumerate(row_data, start=1):
+                cell = ws.cell(row=row_idx, column=col_idx)
+                cell.value = value
+
+                # 如果原始位置有格式，尝试继承
+                if row_idx > start_row:  # 不是第一行数据
+                    try:
+                        # 从上一行复制格式
+                        source_cell = ws.cell(row=row_idx - 1, column=col_idx)
+                        if source_cell.has_style:
+                            cell.font = source_cell.font.copy()
+                            cell.border = source_cell.border.copy()
+                            cell.fill = source_cell.fill.copy()
+                            cell.number_format = source_cell.number_format
+                            cell.alignment = source_cell.alignment.copy()
+                    except:
+                        pass
+
+        wb.save(output_path)
+        wb.close()
