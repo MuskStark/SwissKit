@@ -1,10 +1,11 @@
 import shutil
+from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, Optional, Callable
 
 import pandas as pd
 
-from .excel_split_v2 import ExcelSplitPageV2
+from src.package.enums.progress_status_enums import ProgressStatus
 
 
 class ExcelSplitConfig:
@@ -16,7 +17,7 @@ class ExcelSplitConfig:
 
 class ExcelSplitKM:
 
-    def __init__(self, progress_callback: Optional[Callable[[str, str], None]] = None):
+    def __init__(self, progress_callback: Optional[Callable[[Enum, str], None]] = None):
         """
         初始化Excel拆分处理器
 
@@ -25,12 +26,12 @@ class ExcelSplitKM:
         """
         self.progress_callback = progress_callback
 
-    def _update_progress(self, status: str, message: str):
+    def _update_progress(self, status: Enum, message: str):
         """更新进度"""
         if self.progress_callback:
             self.progress_callback(status, message)
 
-    def split_keep_format(self, excel: ExcelSplitPageV2.ExcelObject, excel_split_config: ExcelSplitConfig,
+    def split_keep_format(self, excel, excel_split_config: ExcelSplitConfig,
                           output_folder_path: str) -> bool:
         """
         根据配置拆分Excel文件并保持格式
@@ -48,27 +49,39 @@ class ExcelSplitKM:
             if excel_split_config.split_sub_model == 'sheet':
                 return self._split_file_by_sheet(excel, output_folder_path)
             elif excel_split_config.split_sub_model == 'col':
-                # 需要传入拆分列信息
+                # 需要传入拆分列信息和sheet名称
                 if excel_split_config.split_config:
+                    sheet_name = excel_split_config.split_config[0].get('sheet_name', None)
                     split_column = excel_split_config.split_config[0].get('split_column', '')
-                    return self._split_file_by_col(excel, output_folder_path, split_column)
+                    return self._split_file_by_col(excel, output_folder_path, split_column, sheet_name)
+            elif excel_split_config.split_sub_model == 'multi_col':
+                # 多Sheet按列拆分
+                if excel_split_config.split_config:
+                    config = excel_split_config.split_config[0]
+                    return self._split_multi_sheets_by_col(
+                        excel,
+                        output_folder_path,
+                        config['selected_sheets'],
+                        config['split_column'],
+                        config['result_dict']
+                    )
         elif excel_split_config.split_model == 1:
             if excel_split_config.split_sub_model == 'multiple':
                 return self._split_multiple_headers_excel(excel, output_folder_path, excel_split_config.split_config)
 
         return False
 
-    def _split_file_by_sheet(self, excel: ExcelSplitPageV2.ExcelObject, output_folder_path: str) -> bool:
+    def _split_file_by_sheet(self, excel, output_folder_path: str) -> bool:
         """按工作表拆分Excel文件"""
         try:
             from openpyxl import load_workbook, Workbook
 
-            self._update_progress('loading', '开始按Sheet拆分并保持格式')
+            self._update_progress(ProgressStatus.LOADING, '开始按Sheet拆分并保持格式')
             original_wb = load_workbook(excel.file_path)
             file_name = Path(excel.file_path).stem
 
             for sheet_name in excel.sheets.keys():
-                self._update_progress('loading', f'生成格式化文件: {sheet_name}')
+                self._update_progress(ProgressStatus.LOADING, f'生成格式化文件: {sheet_name}')
 
                 # Create new workbook with single sheet
                 new_wb = Workbook()
@@ -85,29 +98,33 @@ class ExcelSplitKM:
                 new_wb.close()
 
             original_wb.close()
-            self._update_progress('success', '按Sheet格式保持拆分完成')
+            self._update_progress(ProgressStatus.SUCCESS, '按Sheet格式保持拆分完成')
             return True
 
         except Exception as e:
-            self._update_progress('error', f'按Sheet格式保持拆分失败: {str(e)}')
+            self._update_progress(ProgressStatus.ERROR, f'按Sheet格式保持拆分失败: {str(e)}')
             return False
 
-    def _split_file_by_col(self, excel: ExcelSplitPageV2.ExcelObject,
-                           output_folder_path: str, split_column: str) -> bool:
+    def _split_file_by_col(self, excel,
+                           output_folder_path: str, split_column: str, sheet_name: str = None) -> bool:
         """按指定列的值拆分Excel文件"""
         try:
             from openpyxl import load_workbook, Workbook
 
-            self._update_progress('loading', '开始按列拆分并保持格式')
+            self._update_progress(ProgressStatus.LOADING, '开始按列拆分并保持格式')
             original_wb = load_workbook(excel.file_path)
             file_name = Path(excel.file_path).stem
 
-            for sheet_name, sheet_data in excel.sheets.items():
-                original_ws = original_wb[sheet_name]
+            # 如果指定了sheet_name，只处理该sheet，否则处理所有sheet
+            sheets_to_process = [sheet_name] if sheet_name else list(excel.sheets.keys())
+
+            for current_sheet_name in sheets_to_process:
+                original_ws = original_wb[current_sheet_name]
+                sheet_obj = excel.sheets[current_sheet_name]
 
                 # 找到分割列的索引
                 split_col_idx = None
-                for idx, col in enumerate(sheet_data['headers']):
+                for idx, col in enumerate(sheet_obj.columns):
                     if col == split_column:
                         split_col_idx = idx + 1  # openpyxl uses 1-based indexing
                         break
@@ -123,11 +140,11 @@ class ExcelSplitKM:
 
                 # 为每个唯一值创建新文件
                 for value in unique_values:
-                    self._update_progress('loading', f'生成文件: {sheet_name}_{value}')
+                    self._update_progress(ProgressStatus.LOADING, f'生成文件: {current_sheet_name}_{value}')
 
                     new_wb = Workbook()
                     new_ws = new_wb.active
-                    new_ws.title = sheet_name
+                    new_ws.title = current_sheet_name
 
                     # 复制表头
                     self._copy_header_row(original_ws, new_ws)
@@ -137,19 +154,76 @@ class ExcelSplitKM:
 
                     # 保存文件
                     safe_value = "".join(c for c in value if c.isalnum() or c in (' ', '-', '_')).rstrip()
-                    output_file = Path(output_folder_path, f"{file_name}_{sheet_name}_{safe_value}.xlsx")
+                    if sheet_name:
+                        # 单sheet拆分，不需要在文件名中加sheet名
+                        output_file = Path(output_folder_path, f"{file_name}_{safe_value}.xlsx")
+                    else:
+                        # 多sheet拆分，需要在文件名中加sheet名
+                        output_file = Path(output_folder_path, f"{file_name}_{current_sheet_name}_{safe_value}.xlsx")
                     new_wb.save(output_file)
                     new_wb.close()
 
             original_wb.close()
-            self._update_progress('success', '按列格式保持拆分完成')
+            self._update_progress(ProgressStatus.SUCCESS, '按列格式保持拆分完成')
             return True
 
         except Exception as e:
-            self._update_progress('error', f'按列格式保持拆分失败: {str(e)}')
+            self._update_progress(ProgressStatus.ERROR, f'按列格式保持拆分失败: {str(e)}')
             return False
 
-    def _split_multiple_headers_excel(self, excel: ExcelSplitPageV2.ExcelObject,
+    def _split_multi_sheets_by_col(self, excel,
+                                   output_folder_path: str,
+                                   selected_sheets: list,
+                                   split_column: str,
+                                   result_dict: dict) -> bool:
+        """多Sheet按列拆分，保持格式"""
+        try:
+            from openpyxl import load_workbook
+
+            self._update_progress(ProgressStatus.LOADING, '开始多Sheet按列拆分并保持格式')
+            file_stem = Path(excel.file_path).stem
+
+            for group_name, sheets_data in result_dict.items():
+                self._update_progress(ProgressStatus.LOADING, f'生成文件: {file_stem}_{group_name}.xlsx')
+
+                wb = load_workbook(excel.file_path)
+
+                # 删除未选中的Sheet
+                for ws_name in list(wb.sheetnames):
+                    if ws_name not in selected_sheets:
+                        del wb[ws_name]
+
+                # 处理每个Sheet的数据
+                for sheet_name, group_data in sheets_data.items():
+                    if sheet_name in wb.sheetnames:
+                        ws = wb[sheet_name]
+
+                        # 找到拆分列的索引
+                        col_idx = None
+                        for col in range(1, ws.max_column + 1):
+                            if ws.cell(1, col).value == split_column:
+                                col_idx = col
+                                break
+
+                        if col_idx:
+                            # 删除不属于该组的行（从后往前删除）
+                            rows_to_keep = set(group_data.index + 2)  # +2 因为有表头行，且DataFrame索引从0开始
+                            for row in range(ws.max_row, 1, -1):
+                                if row not in rows_to_keep:
+                                    ws.delete_rows(row)
+
+                output_path = Path(output_folder_path, f"{file_stem}_{group_name}.xlsx")
+                wb.save(output_path)
+                wb.close()
+
+            self._update_progress(ProgressStatus.SUCCESS, '多Sheet按列格式保持拆分完成')
+            return True
+
+        except Exception as e:
+            self._update_progress(ProgressStatus.ERROR, f'多Sheet按列格式保持拆分失败: {str(e)}')
+            return False
+
+    def _split_multiple_headers_excel(self, excel,
                                       output_folder_path: str,
                                       split_config: list[dict[str, Any]]) -> bool:
         """
@@ -175,7 +249,7 @@ class ExcelSplitKM:
 
             temp_folder = Path(output_folder_path, 'tmp')
 
-            self._update_progress('loading', '开始分析数据')
+            self._update_progress(ProgressStatus.LOADING, '开始分析数据')
 
             # 读取和分组数据
             df_group_dic = {}
@@ -204,7 +278,7 @@ class ExcelSplitKM:
                     else:
                         result_dic[group_key][sheet] = data
 
-            self._update_progress('loading', '开始生成文件')
+            self._update_progress(ProgressStatus.LOADING, '开始生成文件')
 
             # 生成最终文件
             total_files = len(result_dic)
@@ -217,7 +291,8 @@ class ExcelSplitKM:
                 safe_key = str(group_key).replace('/', '-').replace('\\', '-').replace(':', '-')
                 file_name = f"{Path(excel.file_path).stem}_{safe_key}.xlsx"
 
-                self._update_progress('loading', f'生成文件 ({current_file}/{total_files}): {file_name}')
+                self._update_progress(ProgressStatus.LOADING,
+                                      f'生成文件 ({current_file}/{total_files}): {file_name}')
 
                 output_file_path = Path(output_folder_path, file_name)
 
@@ -235,11 +310,11 @@ class ExcelSplitKM:
                     # 多个sheet，需要合并到一个文件
                     self._create_multi_sheet_file(sheets_data, split_config_dic, output_file_path)
 
-            self._update_progress('success', f'拆分完成，共生成 {total_files} 个文件')
+            self._update_progress(ProgressStatus.SUCCESS, f'拆分完成，共生成 {total_files} 个文件')
             return True
 
         except Exception as e:
-            self._update_progress('error', f'拆分失败: {str(e)}')
+            self._update_progress(ProgressStatus.ERROR, f'拆分失败: {str(e)}')
             return False
 
         finally:
@@ -250,7 +325,7 @@ class ExcelSplitKM:
                 except Exception as e:
                     print(f"清理临时文件失败: {e}")
 
-    def _generate_template_config(self, excel: ExcelSplitPageV2.ExcelObject,
+    def _generate_template_config(self, excel,
                                   output_folder_path: str,
                                   split_config: list[dict[str, Any]]) -> Optional[Dict[str, Any]]:
         """
@@ -264,7 +339,7 @@ class ExcelSplitKM:
         Returns:
             dict: 包含每个选中sheet配置信息的字典，包括模板文件路径
         """
-        self._update_progress('loading', '开始拆分前准备')
+        self._update_progress(ProgressStatus.LOADING, '开始拆分前准备')
 
         split_config_dic = {}
 
@@ -280,11 +355,11 @@ class ExcelSplitKM:
                     "split_column_index": split_column_index
                 }
             except (ValueError, KeyError) as e:
-                self._update_progress('error', f"配置错误: {str(e)}")
+                self._update_progress(ProgressStatus.ERROR, f"配置错误: {str(e)}")
                 return None
 
         if not split_config_dic:
-            self._update_progress('error', "请至少选择一个Sheet进行拆分")
+            self._update_progress(ProgressStatus.ERROR, "请至少选择一个Sheet进行拆分")
             return None
 
         # 创建临时文件夹
@@ -298,7 +373,7 @@ class ExcelSplitKM:
             source_wb = load_workbook(excel.file_path)
 
             for selected_sheet_name in split_config_dic.keys():
-                self._update_progress('loading', f'准备模板: {selected_sheet_name}')
+                self._update_progress(ProgressStatus.LOADING, f'准备模板: {selected_sheet_name}')
 
                 # 创建新的工作簿作为模板
                 template_wb = Workbook()
@@ -320,11 +395,11 @@ class ExcelSplitKM:
                 split_config_dic[selected_sheet_name]['template_file_path'] = template_file_path
 
             source_wb.close()
-            self._update_progress('loading', '模板准备完成')
+            self._update_progress(ProgressStatus.LOADING, '模板准备完成')
             return split_config_dic
 
         except Exception as e:
-            self._update_progress('error', f'模板生成失败: {str(e)}')
+            self._update_progress(ProgressStatus.ERROR, f'模板生成失败: {str(e)}')
             return None
 
     def _create_multi_sheet_file(self, sheets_data: Dict[str, pd.DataFrame],
