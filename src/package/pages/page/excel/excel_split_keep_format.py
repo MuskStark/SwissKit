@@ -5,7 +5,7 @@ from typing import Any, Dict, Optional, Callable
 
 import pandas as pd
 
-from src.package.enums.progress_status_enums import ProgressStatus
+from ....enums.progress_status_enums import (ProgressStatus)
 
 
 class ExcelSplitConfig:
