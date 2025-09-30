@@ -1,7 +1,7 @@
 import flet as ft
 
+from src.package.pages.page.excel.excel_split_v2 import ExcelSplitPageV2
 from .page.email.email_main import Email
-from .page.excel_split_v2 import ExcelSplitPageV2
 from .page.odap_formater import ODAPFormater
 from .page.odap_search_value import ODAPSearchValue
 

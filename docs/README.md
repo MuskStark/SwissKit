@@ -118,6 +118,12 @@ flet build windows -v
 
 ## 更新日志
 
+### [0.3.2](https://github.com/MuskStark/SwissKit/tree/v0.3.2)
+
+新增
+
+- 支持在拆分时保持原Excel格式
+
 ### [0.3.1.1](https://github.com/MuskStark/SwissKit/tree/v0.3.1.1)
 
 新增
