@@ -134,17 +134,17 @@ class ExcelSplitPageV2(ToolBoxPage):
             _drop_down.options = [ft.DropdownOption(value) for value in _columns_set]
             _drop_down.update()
 
-        def split_logic(_folder_path_text: ft.TextField, _check_box_list_components, _drop_down: ft.Dropdown,
-                        _process_ring: ProgressRingComponent):
+        def split_logic(_folder_path_text, _check_box_list_components, _drop_down, _process_ring):
             result_dic = {}
-            self.page.update()  # 确保页面已更新
+            self.page.update()
             _process_ring.update_status(ProgressStatus.LOADING, "开始拆分")
+
             try:
-                _select_sheet = []
-                for box in _check_box_list_components.controls:
-                    checkbox = cast(ft.Checkbox, box)
-                    if checkbox.value:
-                        _select_sheet.append(checkbox.label)
+                _select_sheet = [cast(ft.Checkbox, box).label for box in _check_box_list_components.controls if
+                                 cast(ft.Checkbox, box).value]
+                if not _select_sheet or not _drop_down.value:
+                    _process_ring.update_status(ProgressStatus.ERROR, "请选择Sheet和拆分列")
+                    return
 
                 for sheet in _select_sheet:
                     df_sheet_data = self.excel.sheets[sheet].df_data
@@ -156,19 +156,34 @@ class ExcelSplitPageV2(ToolBoxPage):
                             result_dic[k][sheet] = v
 
                 if self.kf_checkbox.value:
-                    self._split_multi_sheets_keep_format(self.excel, _folder_path_text.value, _select_sheet,
-                                                         _drop_down.value, result_dic, _process_ring)
+                    # 统一调用 ExcelSplitKM
+                    config = ExcelSplitConfig()
+                    config.split_model = 0
+                    config.split_sub_model = 'multi_col'
+                    config.split_config = [{
+                        'selected_sheets': _select_sheet,
+                        'split_column': _drop_down.value,
+                        'result_dict': result_dic
+                    }]
+                    success = self.kf_editor.split_keep_format(self.excel, config, _folder_path_text.value)
+                    if success:
+                        _process_ring.update_status(ProgressStatus.SUCCESS, "拆分完成")
+                        if self.checkBox.value:
+                            open_folder_in_explorer(_folder_path_text.value)
+                    else:
+                        _process_ring.update_status(ProgressStatus.ERROR, "保持格式拆分失败")
                 else:
+                    # 不保持格式 → 用 pandas
                     for k, v in result_dic.items():
-                        out_file = Path(_folder_path_text.value, Path(self.excel.file_path).stem + f'_{k}.xlsx')
-                        _process_ring.update_status(ProgressStatus.LOADING, f'开始生成-{str(out_file)}')
+                        safe_k = str(k).replace('/', '-')
+                        out_file = Path(_folder_path_text.value, f"{Path(self.excel.file_path).stem}_{safe_k}.xlsx")
                         with pd.ExcelWriter(out_file) as writer:
                             for _k, _v in v.items():
                                 _v.to_excel(writer, sheet_name=_k, index=False)
+                    _process_ring.update_status(ProgressStatus.SUCCESS, "拆分完成")
+                    if self.checkBox.value:
+                        open_folder_in_explorer(_folder_path_text.value)
 
-                _process_ring.update_status(ProgressStatus.SUCCESS, "完成拆分")
-                if self.checkBox.value:
-                    open_folder_in_explorer(output_folder_path_text.value)
             except Exception as e:
                 _process_ring.update_status(ProgressStatus.ERROR, str(e))
 
@@ -199,33 +214,6 @@ class ExcelSplitPageV2(ToolBoxPage):
                 spacing=30,
                 expand=True
             )
-
-    def _split_multi_sheets_keep_format(self, excel, output_folder, selected_sheets, split_column, result_dict,
-                                        progress):
-        from openpyxl import load_workbook
-        file_stem = Path(excel.file_path).stem
-        for group_name, sheets_data in result_dict.items():
-            progress.update_status(ProgressStatus.LOADING, f'生成文件: {file_stem}_{group_name}.xlsx')
-            wb = load_workbook(excel.file_path)
-            for ws_name in list(wb.sheetnames):
-                if ws_name not in selected_sheets:
-                    del wb[ws_name]
-            for sheet_name, group_data in sheets_data.items():
-                if sheet_name in wb.sheetnames:
-                    ws = wb[sheet_name]
-                    col_idx = None
-                    for col in range(1, ws.max_column + 1):
-                        if ws.cell(1, col).value == split_column:
-                            col_idx = col
-                            break
-                    if col_idx:
-                        rows_to_keep = set(group_data.index + 2)
-                        for row in range(ws.max_row, 1, -1):
-                            if row not in rows_to_keep:
-                                ws.delete_rows(row)
-            output_path = Path(output_folder, f"{file_stem}_{group_name}.xlsx")
-            wb.save(output_path)
-            wb.close()
 
     def _split_multiple_headers_excel(self, output_folder_path_text: ft.TextField):
         def _generate_tmp_file(_output_folder_path_text, _split_config_component, _processing):
@@ -259,7 +247,7 @@ class ExcelSplitPageV2(ToolBoxPage):
                 split_config_dic[_selected_sheet_name]['tmp_file_path'] = Path(_output_folder_path_text.value, 'tmp',
                                                                                extractor.file_name)
             if split_config_dic:
-                processing_ring.update_status(ProgressStatus.LOADING, '完成拆分前准备')
+                _processing.update_status(ProgressStatus.LOADING, '完成拆分前准备')
                 return split_config_dic
             else:
                 raise RuntimeError('表头解析异常')
@@ -267,7 +255,7 @@ class ExcelSplitPageV2(ToolBoxPage):
         def _split_logic(_output_folder_path_text, _split_config_component, _processing):
             try:
                 _split_config_dic = _generate_tmp_file(output_folder_path_text, _split_config_component, _processing)
-                processing_ring.update_status(ProgressStatus.LOADING, '开始拆分')
+                _processing.update_status(ProgressStatus.LOADING, '开始拆分')
                 df_group_dic = {}
                 split_configs = []
                 for _sheet_name in _split_config_dic.keys():
@@ -303,7 +291,7 @@ class ExcelSplitPageV2(ToolBoxPage):
                         if '/' in k:
                             k = k.replace('/', '-')
                         file_name = Path(self.excel.file_path).stem + f'_{k}.xlsx'
-                        processing_ring.update_status(ProgressStatus.LOADING, f'生成文件：{file_name}')
+                        _processing.update_status(ProgressStatus.LOADING, f'生成文件：{file_name}')
                         out_file_path = Path(output_folder_path_text.value, file_name)
                         temp_files = []
                         try:
@@ -352,11 +340,11 @@ class ExcelSplitPageV2(ToolBoxPage):
                             for temp_path in temp_files:
                                 if os.path.exists(temp_path):
                                     os.remove(temp_path)
-                processing_ring.update_status(ProgressStatus.SUCCESS, '拆分完成')
+                _processing.update_status(ProgressStatus.SUCCESS, '拆分完成')
                 if self.checkBox.value:
                     open_folder_in_explorer(output_folder_path_text.value)
             except Exception as e:
-                processing_ring.update_status(ProgressStatus.ERROR, str(e))
+                _processing.update_status(ProgressStatus.ERROR, str(e))
             finally:
                 header_tmp_folder_path = Path(output_folder_path_text.value, 'tmp')
                 if header_tmp_folder_path.exists() and header_tmp_folder_path.is_dir():
@@ -426,40 +414,35 @@ class ExcelSplitPageV2(ToolBoxPage):
         def business_logic(mode, sheet_selector, columns_selector, folder_path_text, progress):
             try:
                 if self.excel is None:
-                    raise RuntimeError('未提供待拆分文件或输出文件夹')
-                self.page.update()  # 确保页面已更新
-                progress.update_status(ProgressStatus.LOADING, '开始拆分')
+                    raise RuntimeError('未提供文件')
+
                 file_name = Path(self.excel.file_path).stem
                 if self.kf_checkbox.value:
                     config = ExcelSplitConfig()
                     config.split_model = 0
                     if mode.value == '0':
                         config.split_sub_model = 'sheet'
-                        self.kf_editor.split_keep_format(self.excel, config, folder_path_text.value)
                     else:
                         config.split_sub_model = 'col'
                         config.split_config = [{
                             'sheet_name': sheet_selector.value,
                             'split_column': columns_selector.value
                         }]
-                        self.kf_editor.split_keep_format(self.excel, config, folder_path_text.value)
-                    progress.update_status(ProgressStatus.SUCCESS, '完成文件拆分')
+                    success = self.kf_editor.split_keep_format(self.excel, config, folder_path_text.value)
+                    progress.update_status(ProgressStatus.SUCCESS if success else ProgressStatus.ERROR,
+                                           "拆分完成" if success else "拆分失败")
                 else:
+                    # pandas 快速拆分
                     if mode.value == '1':
-                        progress.update_status(ProgressStatus.LOADING, '开始读取源文件')
                         df = self.excel.sheets[sheet_selector.value].df_data
                         for group, data in df.groupby(columns_selector.value):
-                            final_file_name = f'开始生成{file_name}_{group}.xlsx'
-                            progress.update_status(ProgressStatus.LOADING, final_file_name)
-                            data.to_excel(Path(folder_path_text.value, file_name + f"_{group}.xlsx"), index=False)
-                    elif mode.value == '0':
-                        progress.update_status(ProgressStatus.LOADING, '开始读取源文件')
+                            data.to_excel(Path(folder_path_text.value, f"{file_name}_{group}.xlsx"), index=False)
+                    else:
                         for sheet_name in self.excel.sheets.keys():
-                            final_file_name = f'开始生成{file_name}_{sheet_name}.xlsx'
-                            progress.update_status(ProgressStatus.LOADING, final_file_name)
                             self.excel.sheets[sheet_name].df_data.to_excel(
-                                Path(folder_path_text.value, file_name + f"_{sheet_name}.xlsx"), index=False)
-                    progress.update_status(ProgressStatus.SUCCESS, '完成文件拆分')
+                                Path(folder_path_text.value, f"{file_name}_{sheet_name}.xlsx"), index=False)
+                    progress.update_status(ProgressStatus.SUCCESS, '拆分完成')
+
                 if self.checkBox.value:
                     open_folder_in_explorer(folder_path_text.value)
             except Exception as e:

@@ -4,8 +4,9 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Callable
 
 import pandas as pd
+from openpyxl import load_workbook, Workbook
 
-from ....enums.progress_status_enums import (ProgressStatus)
+from ....enums.progress_status_enums import ProgressStatus
 
 
 class ExcelSplitConfig:
@@ -74,8 +75,6 @@ class ExcelSplitKM:
     def _split_file_by_sheet(self, excel, output_folder_path: str) -> bool:
         """按工作表拆分Excel文件"""
         try:
-            from openpyxl import load_workbook, Workbook
-
             self._update_progress(ProgressStatus.LOADING, '开始按Sheet拆分并保持格式')
             original_wb = load_workbook(excel.file_path)
             file_name = Path(excel.file_path).stem
@@ -109,8 +108,6 @@ class ExcelSplitKM:
                            output_folder_path: str, split_column: str, sheet_name: str = None) -> bool:
         """按指定列的值拆分Excel文件"""
         try:
-            from openpyxl import load_workbook, Workbook
-
             self._update_progress(ProgressStatus.LOADING, '开始按列拆分并保持格式')
             original_wb = load_workbook(excel.file_path)
             file_name = Path(excel.file_path).stem
@@ -146,11 +143,25 @@ class ExcelSplitKM:
                     new_ws = new_wb.active
                     new_ws.title = current_sheet_name
 
-                    # 复制表头
-                    self._copy_header_row(original_ws, new_ws)
+                    # 复制整个sheet，包括格式
+                    self._copy_worksheet_complete(original_ws, new_ws)
 
-                    # 复制符合条件的数据行
-                    self._copy_filtered_rows(original_ws, new_ws, split_col_idx, value)
+                    # 清空数据区，保留表头
+                    data_start_row = 2
+                    for row in range(data_start_row, new_ws.max_row + 1):
+                        for col in range(1, new_ws.max_column + 1):
+                            new_ws.cell(row, col).value = None
+
+                    # 复制符合条件的数据行，并保留格式
+                    target_row = data_start_row
+                    for source_row in original_ws.iter_rows(min_row=data_start_row):
+                        if str(source_row[split_col_idx - 1].value) == value:
+                            for cell in source_row:
+                                target_cell = new_ws.cell(row=target_row, column=cell.column)
+                                target_cell.value = cell.value
+                                target_cell.number_format = cell.number_format
+                                self._copy_cell_style(cell, target_cell)
+                            target_row += 1
 
                     # 保存文件
                     safe_value = "".join(c for c in value if c.isalnum() or c in (' ', '-', '_')).rstrip()
@@ -178,44 +189,45 @@ class ExcelSplitKM:
                                    result_dict: dict) -> bool:
         """多Sheet按列拆分，保持格式"""
         try:
-            from openpyxl import load_workbook
-
             self._update_progress(ProgressStatus.LOADING, '开始多Sheet按列拆分并保持格式')
             file_stem = Path(excel.file_path).stem
+
+            original_wb = load_workbook(excel.file_path)
 
             for group_name, sheets_data in result_dict.items():
                 self._update_progress(ProgressStatus.LOADING, f'生成文件: {file_stem}_{group_name}.xlsx')
 
-                wb = load_workbook(excel.file_path)
+                new_wb = Workbook()
+                new_wb.remove(new_wb.active)
 
-                # 删除未选中的Sheet
-                for ws_name in list(wb.sheetnames):
-                    if ws_name not in selected_sheets:
-                        del wb[ws_name]
+                for sheet_name in selected_sheets:
+                    source_ws = original_wb[sheet_name]
+                    new_ws = new_wb.create_sheet(sheet_name)
+                    self._copy_worksheet_complete(source_ws, new_ws)
 
-                # 处理每个Sheet的数据
-                for sheet_name, group_data in sheets_data.items():
-                    if sheet_name in wb.sheetnames:
-                        ws = wb[sheet_name]
+                    data_start_row = 2  # 假设单一表头，调整如果需要
 
-                        # 找到拆分列的索引
-                        col_idx = None
-                        for col in range(1, ws.max_column + 1):
-                            if ws.cell(1, col).value == split_column:
-                                col_idx = col
-                                break
+                    for r in range(data_start_row, new_ws.max_row + 1):
+                        for c in range(1, new_ws.max_column + 1):
+                            new_ws.cell(r, c).value = None
 
-                        if col_idx:
-                            # 删除不属于该组的行（从后往前删除）
-                            rows_to_keep = set(group_data.index + 2)  # +2 因为有表头行，且DataFrame索引从0开始
-                            for row in range(ws.max_row, 1, -1):
-                                if row not in rows_to_keep:
-                                    ws.delete_rows(row)
+                    if sheet_name in sheets_data:
+                        group_data = sheets_data[sheet_name]
+                        rows_to_copy = group_data.index + data_start_row
+                        target_row = data_start_row
+                        for source_row in sorted(rows_to_copy):
+                            for cell in source_ws[source_row]:
+                                target_cell = new_ws.cell(target_row, cell.column)
+                                target_cell.value = cell.value
+                                target_cell.number_format = cell.number_format
+                                self._copy_cell_style(cell, target_cell)
+                            target_row += 1
 
                 output_path = Path(output_folder_path, f"{file_stem}_{group_name}.xlsx")
-                wb.save(output_path)
-                wb.close()
+                new_wb.save(output_path)
+                new_wb.close()
 
+            original_wb.close()
             self._update_progress(ProgressStatus.SUCCESS, '多Sheet按列格式保持拆分完成')
             return True
 
@@ -251,7 +263,7 @@ class ExcelSplitKM:
 
             self._update_progress(ProgressStatus.LOADING, '开始分析数据')
 
-            # 读取和分组数据
+            # 读取和分组数据，使用dtype=str保留原始字符串值
             df_group_dic = {}
             for sheet_name, config in split_config_dic.items():
                 sheet_object = excel.sheets.get(sheet_name)
@@ -261,7 +273,8 @@ class ExcelSplitKM:
                     excel.file_path,
                     header=None,
                     sheet_name=sheet_name,
-                    skiprows=config['header_rows']
+                    skiprows=config['header_rows'],
+                    dtype=str  # 添加dtype=str以防止类型推断损失数据
                 )
 
                 # 按指定列分组
@@ -284,6 +297,8 @@ class ExcelSplitKM:
             total_files = len(result_dic)
             current_file = 0
 
+            original_wb = load_workbook(excel.file_path)
+
             for group_key, sheets_data in result_dic.items():
                 current_file += 1
 
@@ -304,12 +319,14 @@ class ExcelSplitKM:
                     data_df = sheets_data[sheet_name]
                     header_rows = split_config_dic[sheet_name]['header_rows']
 
-                    self._write_data_with_format(template_path, data_df, sheet_name, header_rows, output_file_path)
+                    self._write_data_with_format(template_path, data_df, sheet_name, header_rows, output_file_path,
+                                                 original_wb)
 
                 else:
                     # 多个sheet，需要合并到一个文件
-                    self._create_multi_sheet_file(sheets_data, split_config_dic, output_file_path)
+                    self._create_multi_sheet_file(sheets_data, split_config_dic, output_file_path, original_wb)
 
+            original_wb.close()
             self._update_progress(ProgressStatus.SUCCESS, f'拆分完成，共生成 {total_files} 个文件')
             return True
 
@@ -367,8 +384,6 @@ class ExcelSplitKM:
         tmp_folder.mkdir(parents=True, exist_ok=True)
 
         # 为每个选中的sheet创建带完整格式的模板文件
-        from openpyxl import load_workbook, Workbook
-
         try:
             source_wb = load_workbook(excel.file_path)
 
@@ -404,10 +419,8 @@ class ExcelSplitKM:
 
     def _create_multi_sheet_file(self, sheets_data: Dict[str, pd.DataFrame],
                                  split_config_dic: Dict[str, Any],
-                                 output_file_path: Path):
+                                 output_file_path: Path, original_wb):
         """创建包含多个工作表的文件"""
-        from openpyxl import Workbook, load_workbook
-
         final_wb = Workbook()
         final_wb.remove(final_wb.active)  # 移除默认sheet
 
@@ -425,12 +438,18 @@ class ExcelSplitKM:
             # 复制模板格式
             self._copy_worksheet_complete(template_ws, final_ws)
 
-            # 写入数据
-            start_row = header_rows + 1
-            for row_idx, (_, row_data) in enumerate(data_df.iterrows(), start=start_row):
-                for col_idx, value in enumerate(row_data, start=1):
-                    cell = final_ws.cell(row=row_idx, column=col_idx)
-                    cell.value = value
+            # 复制选中行
+            source_ws = original_wb[sheet_name]
+            data_start_row = header_rows + 1
+            rows_to_copy = sorted(data_df.index + data_start_row)
+            target_row = data_start_row
+            for source_row in rows_to_copy:
+                for cell in source_ws[source_row]:
+                    target_cell = final_ws.cell(target_row, cell.column)
+                    target_cell.value = cell.value
+                    target_cell.number_format = cell.number_format
+                    self._copy_cell_style(cell, target_cell)
+                target_row += 1
 
             template_wb.close()
 
@@ -457,11 +476,8 @@ class ExcelSplitKM:
                 for cell in row:
                     target_cell = target_ws.cell(row=target_row, column=cell.column)
                     target_cell.value = cell.value
-                    if cell.has_style:
-                        target_cell.font = cell.font.copy()
-                        target_cell.border = cell.border.copy()
-                        target_cell.fill = cell.fill.copy()
-                        target_cell.alignment = cell.alignment.copy()
+                    target_cell.number_format = cell.number_format
+                    self._copy_cell_style(cell, target_cell)
                 target_row += 1
 
     def _copy_worksheet_complete(self, source_ws, target_ws):
@@ -543,7 +559,7 @@ class ExcelSplitKM:
             if merged_range.min_row <= header_rows:
                 target_ws.merge_cells(str(merged_range))
 
-    def _write_data_with_format(self, template_file_path, data_df, sheet_name, header_rows, output_path):
+    def _write_data_with_format(self, template_file_path, data_df, sheet_name, header_rows, output_path, original_wb):
         """
         将数据写入模板文件并保持格式
 
@@ -553,9 +569,8 @@ class ExcelSplitKM:
             sheet_name: 工作表名称
             header_rows: 表头行数
             output_path: 输出文件路径
+            original_wb: 原始工作簿，用于获取源格式
         """
-        from openpyxl import load_workbook
-
         # 复制模板到输出位置
         shutil.copy2(template_file_path, output_path)
 
@@ -563,28 +578,26 @@ class ExcelSplitKM:
         wb = load_workbook(output_path)
         ws = wb[sheet_name]
 
-        # 从表头行之后开始写入数据
-        start_row = header_rows + 1
-
-        # 逐行写入数据，保持原有格式
-        for row_idx, (_, row_data) in enumerate(data_df.iterrows(), start=start_row):
-            for col_idx, value in enumerate(row_data, start=1):
-                cell = ws.cell(row=row_idx, column=col_idx)
-                cell.value = value
-
-                # 如果原始位置有格式，尝试继承
-                if row_idx > start_row:  # 不是第一行数据
-                    try:
-                        # 从上一行复制格式
-                        source_cell = ws.cell(row=row_idx - 1, column=col_idx)
-                        if source_cell.has_style:
-                            cell.font = source_cell.font.copy()
-                            cell.border = source_cell.border.copy()
-                            cell.fill = source_cell.fill.copy()
-                            cell.number_format = source_cell.number_format
-                            cell.alignment = source_cell.alignment.copy()
-                    except:
-                        pass
+        source_ws = original_wb[sheet_name]
+        data_start_row = header_rows + 1
+        rows_to_copy = sorted(data_df.index + data_start_row)
+        target_row = data_start_row
+        for source_row in rows_to_copy:
+            for cell in source_ws[source_row]:
+                target_cell = ws.cell(target_row, cell.column)
+                target_cell.value = cell.value
+                target_cell.number_format = cell.number_format
+                self._copy_cell_style(cell, target_cell)
+            target_row += 1
 
         wb.save(output_path)
         wb.close()
+
+    def _copy_cell_style(self, src, dst):
+        if src.has_style:
+            dst.font = src.font.copy()
+            dst.border = src.border.copy()
+            dst.fill = src.fill.copy()
+            dst.number_format = src.number_format
+            dst.protection = src.protection.copy()
+            dst.alignment = src.alignment.copy()
