@@ -9,11 +9,12 @@ authors = [
 ]
 dependencies = [
     "certifi>=2025.7.14",
-    "flet==0.80.0",
+    "flet==0.28.2",
     "openpyxl>=3.1.5",
     "pandas>=2.3.1",
     "pandas-stubs>=2.3.0.250703",
     "peewee>=3.18.2",
+    "picologging>=0.9.3",
     "pypinyin>=0.55.0",
     "python-levenshtein>=0.27.1",
     "pyyaml>=6.0.2",
@@ -45,14 +46,14 @@ message = "Swiss Kit is loading........"
 
 [tool.uv]
 dev-dependencies = [
-    "flet[all]==0.80.0",
+    "flet[all]==0.28.2",
 ]
 
 [tool.poetry]
 package-mode = false
 
-#[tool.poetry.group.dev.dependencies]
-#flet = { extras = ["all"], version = "0.28.2" }
-#
-#[tool.flet.flutter.pubspec.dependency_overrides]
-#webview_flutter_android = "4.10.1"
+[tool.poetry.group.dev.dependencies]
+flet = { extras = ["all"], version = "0.28.2" }
+
+[tool.flet.flutter.pubspec.dependency_overrides]
+webview_flutter_android = "4.10.1"
