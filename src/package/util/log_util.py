@@ -1,7 +1,7 @@
 import os
 import platform
 
-import picologging as logging
+import logging
 import sys
 from pathlib import Path
 from datetime import datetime
@@ -114,7 +114,7 @@ class LoggerUtility:
 
     def _add_file_handler(self):
         """添加文件处理器"""
-        from picologging.handlers import RotatingFileHandler
+        from logging.handlers import RotatingFileHandler
 
         # 为每个logger创建独立的子目录
         logger_dir = self.log_dir / self.name
